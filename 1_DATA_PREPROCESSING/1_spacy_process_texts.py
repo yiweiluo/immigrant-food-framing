@@ -6,31 +6,23 @@ import pickle
 import pandas as pd
 import argparse
 import spacy
-#import stanza
-#import spacy_stanza
 from spacy.tokens import DocBin, Doc
 from tqdm import tqdm, trange
 from collections import Counter, defaultdict
 import re
 import time
 
-# stanza.download("en")
-# nlp = spacy_stanza.load_pipeline("en", use_gpu=True)
 spacy.prefer_gpu()
 nlp = spacy.load("en_core_web_lg")
 nlp.add_pipe('coreferee')
 
 def load_df(path_to_df, debug, start_batch_no, end_batch_no, batch_size):
     file_sep = ',' if path_to_df.endswith('.csv') else '\t'
-    if debug:
-        start_batch_no, end_batch_no = 0, 1
     print(f"\nReading in lines {start_batch_no*batch_size} to {start_batch_no*batch_size+(end_batch_no-start_batch_no)*batch_size} of df...")
     df = pd.read_csv(path_to_df, sep=file_sep, skiprows=range(1,start_batch_no*batch_size+1), nrows=(end_batch_no-start_batch_no)*batch_size)#, index_col=0)
     if 'og_index' not in df.columns:
         print("\tNo OG index found; adding original index to keep track of batches...")
         df['og_index'] = list(range(len(df)))
-    # batch0: skip [1:0] = [0], nrows=1001 -> [0,1000]
-    # batch1: skip [1:1000], nrows=1000 -> [0:1001+1000] = [0:1001,2001]
         
     print(f"\tDone! Start, end indices: ({df['og_index'].values[0]}, {df['og_index'].values[-1]})")
     return df
@@ -57,11 +49,11 @@ def save_guid_batch_no_info(debug, out_dir, batched_df, batch_size, guid_str='re
 def strip_punc(raw_text):
     return re.sub(r'[^\w\s]','',raw_text)
 
-def stanza_process(raw_text):
+def spacy_process(raw_text):
     doc = nlp(raw_text)
     return doc
 
-def batch_stanza_process(out_dir, df, start_batch_no, end_batch_no, batch_size, text_fields='text', debug=False):
+def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, text_fields='text', debug=False):
     
     if debug:
         print("\nDebug mode ON, will stop after first batch.")
@@ -81,9 +73,8 @@ def batch_stanza_process(out_dir, df, start_batch_no, end_batch_no, batch_size, 
         doc_bin = DocBin(attrs=["ORTH", "TAG", "HEAD", "DEP", "ENT_IOB", "ENT_TYPE", "ENT_KB_ID", "LEMMA", "MORPH", "POS"], store_user_data=True)
         for row_ix, row in tqdm(batch.iterrows()):
             text = ". ".join([row[tf] for tf in text_fields if type(row[tf])==str])
-            #text = row[text_fields[0]].values
             if (type(text) == str) and (len(strip_punc(text)) > 0):
-                doc = stanza_process(text)
+                doc = spacy_process(text)
             else:
                 doc = Doc(nlp.vocab)
             if debug:
@@ -110,15 +101,14 @@ def batch_stanza_process(out_dir, df, start_batch_no, end_batch_no, batch_size, 
 def main(path_to_dataset, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
     texts = load_df(path_to_dataset, debug, start_batch_no, end_batch_no, batch_size)
     reviews = batch_df(texts, batch_size)
-    #save_guid_batch_no_info(debug, out_dir, texts, batch_size)
-    batch_stanza_process(out_dir, texts, start_batch_no, end_batch_no, batch_size, text_fields=text_fields, debug=debug)
+    batch_spacy_process(out_dir, texts, start_batch_no, end_batch_no, batch_size, text_fields=text_fields, debug=debug)
     
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path_to_texts', type=str, default='data/yelp/restaurants_only/restaurant_reviews_df.csv',
+    parser.add_argument('--path_to_texts', type=str, default='../data/yelp/restaurants_only/restaurant_reviews_df.csv',
                         help='where to read in texts dataframe from')
-    parser.add_argument('--out_dir', type=str, default='data/yelp/restaurants_only/spacy_processed_coref',
+    parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only/spacy_processed',
                         help='directory to save output to')
     parser.add_argument('--text_fields', type=str, default='text',
                         help='column name(s) for text fields')
@@ -134,10 +124,11 @@ if __name__ == "__main__":
     if not args.debug:
         print("\n******WARNING****** DEBUG MODE OFF!")
     else:
-        print("\nRunning in debug mode; will limit to processing first batch of texts.")
+        print("\nRunning in debug mode; will limit to processing first batch of texts with batch size of 10.")
+        args.start_batch_no, args.end_batch_no, args.batch_size = 0, 1, 10
     
     if not os.path.exists(args.out_dir):
-        os.mkdir(args.out_dir)
+        os.makedirs(args.out_dir)
         
     main(args.path_to_texts, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug)
     
