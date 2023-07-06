@@ -1,0 +1,17 @@
+affordable
+bargain
+budget
+cheap
+costly
+economical
+exorbitant
+expensive
+inexpensive
+low-cost
+low-priced
+low_cost
+low_priced
+overpriced
+pricey
+uncostly
+unexpensive

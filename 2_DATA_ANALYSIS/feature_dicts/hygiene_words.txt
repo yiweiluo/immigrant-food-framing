@@ -1,0 +1,17 @@
+clean
+dirty
+disgusting
+filthy
+grimy
+gross
+hygienic
+messy
+nasty
+sanitary
+smelly
+spotless
+stinking
+stinky
+tidy
+unhygienic
+unsanitary
