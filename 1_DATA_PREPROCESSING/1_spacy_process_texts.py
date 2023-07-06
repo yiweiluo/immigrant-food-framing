@@ -67,6 +67,9 @@ def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, t
     #batch_groups = batched_df.groupby('batch_no')
     for batch_no in trange(start_batch_no, end_batch_no, 1):
         batch = df.iloc[(batch_no-start_batch_no)*batch_size:(batch_no-start_batch_no+1)*batch_size]
+        if len(batch) == 0:
+            print("\nRan out of input, terminating.")
+            break
         print(f"\nProcessing batch {batch_no} of length {len(batch)}, with (start, end) indices = ({batch['og_index'].values[0]}, {batch['og_index'].values[-1]})...")
         time.sleep(20)
 
