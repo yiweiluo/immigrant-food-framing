@@ -1,0 +1,16 @@
+employee
+staff
+waitstaff
+hostess
+customer_service
+bartender
+worker
+manager
+barista
+wait_staff
+waiter
+management
+server
+owner
+waitress
+cashier
