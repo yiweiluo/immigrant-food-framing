@@ -176,12 +176,12 @@ def extract_all_frames(
                 doc_ix = row['og_index'] % batch_size
                 doc = docs[doc_ix]
                 
-                if (row['og_index'] % print_every == 0):
+                if (row_ix % print_every == 0):
                     print(f"\nOn doc {doc_ix} of batch {batch_no}")
-                    #print("Review text:", row['text'][:50])
+                    print("Review text:", row['text'][:50])
                 
                 full_tokens = extract_frames_from_doc(doc, pos_tag_set=pos_tags)
-                #print("Extracted frames:", full_tokens)
+                print("Extracted frames:", full_tokens)
                 
                 if row['og_index'] % print_every == 0:
                     all_tup_ixs = set([full_tokens[key]['mod']['mod_ix'] for key in full_tokens 

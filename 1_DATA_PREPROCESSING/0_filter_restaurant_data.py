@@ -68,9 +68,9 @@ def main(path_to_dataset, out_dir, debug):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path_to_data_dir', type=str, default='data/yelp',
+    parser.add_argument('--path_to_data_dir', type=str, default='../data/yelp',
                         help='directory to read in Yelp open dataset from')
-    parser.add_argument('--out_dir', type=str, default='data/yelp/restaurants_only',
+    parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only',
                         help='directory to save output filtered dataframes to')
     parser.add_argument('--debug', action='store_true',
                         help='whether to run on subset of data for debugging purposes')
