@@ -402,8 +402,6 @@ if __name__ == "__main__":
                         help='directory to save output to')
     parser.add_argument('--guid', type=str, default='review_id',
                         help='field to use for GUID in raw data df')
-    parser.add_argument('--batch_size', type=int, default=5000,
-                        help='batch size for spaCy')
     parser.add_argument('--start_batch_no', type=int, default=0,
                         help='start batch index')
     parser.add_argument('--end_batch_no', type=int, default=1026,
