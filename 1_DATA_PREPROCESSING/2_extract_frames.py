@@ -382,7 +382,7 @@ def create_frames_lookup(lemmas_per_review, out_dir, debug):
     
     return D
     
-def main(path_to_df, path_to_parsed, out_dir, guid, batch_size, start_batch_no, end_batch_no, from_cache, debug):
+def main(path_to_df, path_to_parsed, out_dir, guid, start_batch_no, end_batch_no, from_cache, debug):
     raw_df = load_raw_df(path_to_df)
     batched_df = batch_df(raw_df, batch_size)
     parsed_docs = load_parsed_docs(path_to_parsed)
