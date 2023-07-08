@@ -2,13 +2,13 @@
 # coding: utf-8
 
 import os, glob
-import pickle
+import pickle, dill
 import numpy as np
 import pandas as pd
 import argparse
 from tqdm import tqdm, trange
 from collections import Counter, defaultdict
-import time
+import sys
 
 feat_lists = glob.glob('feature_dicts/*.txt')
 feat_dict = {}
@@ -17,23 +17,25 @@ for fname in feat_lists:
     with open(fname,'r') as f:
         feat_dict[feat_name] = f.read().splitlines()
 avail_feats = [x.split('/')[-1].split('.txt')[0] for x in feat_lists]
-print("Available dictionaries for feature aggregation:", sorted(avail_feats))
-anchor_type2anchors = None
+print("\n\nAvailable dictionaries for feature aggregation:", sorted(avail_feats))
+#anchor_type2anchors = None
 NEGATIONS = {'not','no'}
 
 def load_anchor_sets():
     print("\nLoading anchor sets...")
-    with open('anchor_sets/food_anchors.txt','r') as f:
+    with open('../anchor_sets/food_anchors.txt','r') as f:
         food_anchors = set(f.read().splitlines())
-    with open('anchor_sets/establishment_anchors.txt','r') as f:
+    with open('../anchor_sets/establishment_anchors.txt','r') as f:
         establishment_anchors = set(f.read().splitlines())
-    with open('anchor_sets/waitstaff_anchors.txt','r') as f:
+    with open('../anchor_sets/waitstaff_anchors.txt','r') as f:
         service_anchors = set(f.read().splitlines())
     print(f"\tDone! Found {len(food_anchors)} food anchors, {len(service_anchors)} staff anchors, and {len(establishment_anchors)} venue anchors.")
     anchor_type2anchors = {
         'food': food_anchors, 'staff': service_anchors, 'venue': establishment_anchors}
     for anchor_type in anchor_type2anchors:
-        print(f"\tSample {anchor_type} anchors: {np.random.sample(anchor_type2anchors[anchor_type], 5, replace=False)}")
+        print(f"\tSample {anchor_type} anchors: {np.random.choice(a=list(anchor_type2anchors[anchor_type]), size=5, replace=False)}")
+        
+    return anchor_type2anchors
 
 def load_lookup(path_to_lookup):
     print("\nLoading feature lookup dict...")
@@ -65,30 +67,37 @@ def _score_dict_feat(frames,feat='filtered_liwc_posemo',return_matches=True,norm
     else:
         return score
 
-def aggregate_features(lookup, out_dir, add_to_cache, debug):
+def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug):
     
     print("\nAggregating features into framing dimensions using dictionaries...")
     if add_to_cache:
-        print("\tLooking for existing aggregated features to add to...")
+        print("\tLooking for cached aggregated features to add to...")
         try:
             agg_feats_per_review = dill.load(os.path.join(out_dir, "aggregated_frames_lookup.dill"), 'rb')
-            print(f"\t\tLoaded cached dict of len {len(agg_feats_per_review)}!")
+            print(f"\t\tLoaded cached dict of length {len(agg_feats_per_review)}!")
         except FileNotFoundError:
             print("No existing feature file found, exiting.")
-            # TO DO quit
+            sys.exit()
     else:
-        agg_feats_per_review = defaultdict(dict)
+        print("\tCreating agg. features from scratch...")
+        agg_feats_per_review = defaultdict(lambda: defaultdict(dict))
     
-    for _, key in tqdm(enumerate(lookup)):
-        review_id, biz_id = key.split('|')
-        review_frames = frames_lookup[review_id]
+    for _, review_id in tqdm(enumerate(lookup)):
+        #review_id, biz_id = key.split('|')
+        review_frames = lookup[review_id]
+#         print(review_id)
+#         print(review_frames)
         for feat in avail_feats:
             no_neg_agg_score = 0
             no_neg_agg_matches = Counter()
-            for anchor_type in ['food','service','establishment']:
+            for anchor_type in anchor_dict:
+#                 print(anchor_type)
+#                 print([x[2] for x in review_frames])
+#                 print()
+#                 print([x[3] for x in review_frames])
                 anchor_frames = [x for x in review_frames
-                                 if x[2].replace('_',' ') in anchor_type2anchors[anchor_type]
-                                 or x[3].replace('_',' ') in anchor_type2anchors[anchor_type]]
+                                 if x[2].replace('_',' ') in anchor_dict[anchor_type]
+                                 or x[3].replace('_',' ') in anchor_dict[anchor_type]]
                 anchor_frames_no_neg = [x[1] for x in anchor_frames
                                         if len(set(x[0].split(',')).intersection(NEGATIONS)) == 0]
 #                 full_res = score_dict_feat(anchor_frames_with_neg, feat=feat)
@@ -109,16 +118,19 @@ def aggregate_features(lookup, out_dir, add_to_cache, debug):
             agg_feats_per_review[review_id][feat]['agg'] = (no_neg_agg_score, no_neg_agg_matches)
         
         if debug and _ > 10:
-            dill.dump(open(os.path.join(out_dir, "test_aggregated_frames_lookup.dill"), 'wb'))
-            # TODO quit (to avoid overwriting existing output)
+            print("\tSaving test aggregated features dict...")
+            dill.dump(agg_feats_per_review, open(os.path.join(out_dir, "test_aggregated_frames_lookup.dill"), 'wb'))
+            print("\t\tDone!")
+            sys.exit()
     
-    dill.dump(open(os.path.join(out_dir, "aggregated_frames_lookup.dill"), 'wb'))
+    print("\tSaving aggregated features dict...")
+    dill.dump(agg_feats_per_review, open(os.path.join(out_dir, "aggregated_frames_lookup.dill"), 'wb'))
+    print("\t\tDone!")
     
-def main(path_to_lookup, out_dir, debug):
-    load_anchor_sets()
+def main(path_to_lookup, out_dir, add_to_cache, debug):
+    anchors_dict = load_anchor_sets()
     lookup = load_lookup(path_to_lookup)
-    aggregate_features(lookup, out_dir)
-    
+    aggregate_features(lookup, anchors_dict, out_dir, add_to_cache, debug)
     
     
 if __name__ == "__main__":
@@ -128,14 +140,6 @@ if __name__ == "__main__":
                         help='where to read in feature lookup dict from')
     parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only',
                         help='directory to save output to')
-    
-    parser.add_argument('--text_fields', type=str, default='text',
-                        help='column name(s) for text fields')
-    parser.add_argument('--batch_size', type=int, default=5000,
-                        help='batch size for spaCy')
-    parser.add_argument('--start_batch_no', type=int, default=0, 
-                        help='batch number to start at')
-    
     parser.add_argument('--add_to_cache', action='store_true',
                         help='whether to build on cached aggregated features')
     parser.add_argument('--debug', action='store_true',
