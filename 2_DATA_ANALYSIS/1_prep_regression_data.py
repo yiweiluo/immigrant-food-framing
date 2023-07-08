@@ -202,7 +202,7 @@ def hydrate_reviews_with_biz_data(restaurants_df, reviews_df, out_dir):
                       'cuisine_region': 'continents',
                       'cuisines': 'categories'}
     biz_id2fields = {}
-    for field in field2col_name:
+    for field in tqdm(field2col_name):
         if field == 'cuisines':
             biz_id2fields[field] = dict(zip(restaurants_df['business_id'], 
                                             restaurants_df[field].apply(lambda x: set(x).intersection(TOP_CUISINES))))
@@ -216,7 +216,7 @@ def hydrate_reviews_with_biz_data(restaurants_df, reviews_df, out_dir):
     print("\tDone! New reviews_df columns:", reviews_df.columns)
     print("\nCuisine region distribution:")
     print(reviews_df['biz_cuisine_region'].value_counts())
-    print("\nCuisine distribution in review data:")
+    print("\nIndividual cuisine distribution:")
     for cuisine in TOP_CUISINES:
         print(cuisine, len(reviews_df.loc[reviews_df['biz_cuisines'].apply(lambda x: cuisine in x)]))
         
@@ -233,7 +233,7 @@ def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, out_d
     raw_reviews = load_raw_reviews(path_to_raw_reviews)
     review_ids = get_filtered_business_reviews(filtered_restaurants, raw_reviews)
     reviews_df = create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, debug)
-    hydrated_reviews_df = hydrate_reviews_with_biz_data(filtered_restaurants, reviews_df, out_dir)
+#     hydrated_reviews_df = hydrate_reviews_with_biz_data(filtered_restaurants, reviews_df, out_dir)
     
 if __name__ == "__main__":
     
