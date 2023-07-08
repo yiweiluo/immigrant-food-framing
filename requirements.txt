@@ -6,8 +6,10 @@ click==8.0.4
 confection==0.1.0
 contextvars==2.4
 coreferee==1.4.1
+coreferee-model-en @ https://github.com/richardpaulhudson/coreferee/raw/master/models/coreferee_model_en.zip
 cymem==2.0.7
 dataclasses==0.8
+dill==0.3.4
 en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.4.1/en_core_web_lg-3.4.1-py3-none-any.whl
 idna==3.4
 immutables==0.19
