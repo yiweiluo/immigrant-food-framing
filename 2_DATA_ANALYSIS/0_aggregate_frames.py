@@ -73,7 +73,7 @@ def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug):
     if add_to_cache:
         print("\tLooking for cached aggregated features to add to...")
         try:
-            agg_feats_per_review = dill.load(os.path.join(out_dir, "aggregated_frames_lookup.dill"), 'rb')
+            agg_feats_per_review = dill.load(open(os.path.join(out_dir, "aggregated_frames_lookup.dill"), 'rb'))
             print(f"\t\tLoaded cached dict of length {len(agg_feats_per_review)}!")
         except FileNotFoundError:
             print("No existing feature file found, exiting.")
@@ -82,29 +82,19 @@ def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug):
         print("\tCreating agg. features from scratch...")
         agg_feats_per_review = defaultdict(lambda: defaultdict(dict))
     
-    for _, review_id in tqdm(enumerate(lookup)):
-        #review_id, biz_id = key.split('|')
+    reviews_to_add = set(lookup.keys()).difference(agg_feats_per_review.keys())
+    print(f"\tFound {len(reviews_to_add)} reviews to add to cache. Sample IDs: {list(reviews_to_add)[:3]}. Adding...")
+    for _, review_id in tqdm(enumerate(reviews_to_add)):
         review_frames = lookup[review_id]
-#         print(review_id)
-#         print(review_frames)
         for feat in avail_feats:
             no_neg_agg_score = 0
             no_neg_agg_matches = Counter()
             for anchor_type in anchor_dict:
-#                 print(anchor_type)
-#                 print([x[2] for x in review_frames])
-#                 print()
-#                 print([x[3] for x in review_frames])
                 anchor_frames = [x for x in review_frames
                                  if x[2].replace('_',' ') in anchor_dict[anchor_type]
                                  or x[3].replace('_',' ') in anchor_dict[anchor_type]]
                 anchor_frames_no_neg = [x[1] for x in anchor_frames
                                         if len(set(x[0].split(',')).intersection(NEGATIONS)) == 0]
-#                 full_res = score_dict_feat(anchor_frames_with_neg, feat=feat)
-#                 full_score = full_res[0]
-#                 full_matches = full_res[1]
-#                 full_agg_score += full_score
-#                 full_agg_matches += full_matches
                 no_neg_res = _score_dict_feat(anchor_frames_no_neg, feat=feat)
                 no_neg_score = no_neg_res[0]
                 no_neg_matches = no_neg_res[1] 
@@ -117,7 +107,7 @@ def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug):
                 no_neg_agg_matches = -1
             agg_feats_per_review[review_id][feat]['agg'] = (no_neg_agg_score, no_neg_agg_matches)
         
-        if debug and _ > 10:
+        if debug and _ == 9:
             print("\tSaving test aggregated features dict...")
             dill.dump(agg_feats_per_review, open(os.path.join(out_dir, "test_aggregated_frames_lookup.dill"), 'wb'))
             print("\t\tDone!")
