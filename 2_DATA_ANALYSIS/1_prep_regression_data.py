@@ -26,7 +26,7 @@ def _is_homogeneous(continents, verbose=False):
 
 def prep_census_enriched_df(path_to_enriched_df):
     restaurant_data = pd.read_csv(path_to_enriched_df,index_col=0)
-    print(f"Read in census enriched business data with {len(restaurant_data)} rows.")
+    print(f"Read in census enriched business data from {path_to_enriched_df} with {len(restaurant_data)} rows.")
 
     # Filter to restaurant data
     restaurant_data['categories'] = restaurant_data['categories'].apply(lambda x: x.split(',') if type(x) == str else [])
@@ -165,7 +165,7 @@ def main(path_to_enriched_df, out_dir, text_fields, batch_size, start_batch_no, 
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path_to_enriched_df', type=str, default='',
+    parser.add_argument('--path_to_enriched_df', type=str, default='../data/yelp/census_enriched_business_data.csv',
                         help='where to read in census enriched dataframe from')
     parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only/spacy_processed',
                         help='directory to save output to')
