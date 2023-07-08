@@ -14,13 +14,6 @@ from tqdm import tqdm, trange
 spacy.prefer_gpu()
 nlp_spacy = spacy.load("en_core_web_lg")
 
-# with open('../anchor_sets/food_anchors.txt','r') as f:
-#     food_anchors = set(f.read().splitlines())
-# with open('../anchor_sets/establishment_anchors.txt','r') as f:
-#     establishment_anchors = set(f.read().splitlines())
-# with open('../anchor_sets/waitstaff_anchors.txt','r') as f:
-#     service_anchors = set(f.read().splitlines())
-
 def flatten(l):
     return [item for sublist in l for item in sublist]
 
@@ -71,9 +64,6 @@ def get_attrs(doc, adj_tok, anchor=None):
     # Map pronouns to anaphors
     mention2anaphor = {}
     for chain in doc._.coref_chains:
-        #print(chain.index)
-        #print(chain.mentions)
-        #print(chain.most_specific_mention_index)
         for mention in chain.mentions:
             mention2anaphor[mention[0]] = chain.mentions[chain.most_specific_mention_index][0]
     
@@ -283,69 +273,6 @@ def extract_frames_from_doc(doc, pos_tag_set={'ADJ'}, verbose=False):
                 print((all_frames_dict[adj_tok.i]['mod']['mod_advs'],all_frames_dict[adj_tok.i]['mod']['mod_lemma'],all_frames_dict[adj_tok.i]['anchor']['full_anchor_lemmas']))
     
     return all_frames_dict
-
-# def extract_token_tuples(
-#     guid,
-#     all_ngrams,
-#     anchors=None, # anchors to filter to
-#     #keep_anchors=False, # whether to include anchor lemmas in the retrieved ngrams 
-#     unigrams=True, # whether to return unigram dependents
-#     bigrams=True, # whether to return bigram dependents
-#     trigrams=False, # whether to return trigram dependents
-#     verbose=False,
-#     compounds_file='/u/scr/yiweil/w-nw-food/compounds.txt',
-#     compounds_set={}
-# ):    
-#     #print(compounds_file is None)
-#     if compounds_file is not None:
-#         compounds_set = retrieve_compounds(compounds_file=compounds_file, verbose=False)
-    
-#     full_ngrams = all_ngrams[guid]
-#     tokens = []
-#     for ix in full_ngrams:
-#         d = full_ngrams[ix].copy()
-#         #print("d:", d)
-#         if d['full_anchor_lemmas'] != None:
-#             #if d['full_anchor_lemmas'].replace('_',' ') in anchors:
-#             #    if (f"{d['mod_lemma']} {d['full_anchor_lemmas']}" not in compounds_set) and (f"{d['mod_token']} {d['full_anchor_lemmas']}" not in compounds_set):
-#             if unigrams:
-#                 tokens.append((d['mod_lemma'], d['full_anchor_lemmas'], d['mod_advs'], guid))
-#             if bigrams:
-#                 tokens.append((d['mod_bigram_left'], d['full_anchor_lemmas'], d['mod_advs'], guid))
-#                 tokens.append((d['mod_bigram_right'], d['full_anchor_lemmas'], d['mod_advs'], guid))
-#             if trigrams:
-#                 tokens.append((d['mod_trigram_left'], d['full_anchor_lemmas'], d['mod_advs'], guid))
-#                 tokens.append((d['mod_trigram_right'], d['full_anchor_lemmas'], d['mod_advs'], guid))
-# #                 else:
-# #                     if verbose:
-# #                         print(f"`{d['mod_lemma']} {d['full_anchor_lemmas']}` is a compound; excluding.") 
-#         else:
-#             if full_ngrams[ix]['anchor_ix'] in full_ngrams:
-#                 head_d = full_ngrams[full_ngrams[ix]['anchor_ix']].copy()
-#                 #print("head d:", head_d)
-#                 while head_d['full_anchor_lemmas'] == None:
-#                     if head_d['anchor_ix'] in full_ngrams:
-#                         head_d = full_ngrams[head_d['anchor_ix']].copy()
-#                     else:
-#                         break
-#                 if head_d['full_anchor_lemmas'] != None:
-# #                     if head_d['full_anchor_lemmas'].replace('_',' ') in anchors:
-# #                         if (f"{d['mod_lemma']} {d['full_anchor_lemmas']}" not in compounds_set) and (f"{d['mod_token']} {d['full_anchor_lemmas']}" not in compounds_set):
-#                     if unigrams:
-#                         tokens.append((d['mod_lemma'], head_d['full_anchor_lemmas'], d['mod_advs'], guid))
-#                     if bigrams:
-#                         tokens.append((d['mod_bigram_left'], head_d['full_anchor_lemmas'], d['mod_advs'], guid))
-#                         tokens.append((d['mod_bigram_right'], head_d['full_anchor_lemmas'], d['mod_advs'], guid))
-#                     if trigrams:
-#                         tokens.append((d['mod_trigram_left'], head_d['full_anchor_lemmas'], d['mod_advs'], guid))
-#                         tokens.append((d['mod_trigram_right'], head_d['full_anchor_lemmas'], d['mod_advs'], guid))
-# #                     else:
-# #                         if verbose:
-# #                             print(f"`{d['mod_lemma']} {d['full_anchor_lemmas']}` is a compound; excluding.") 
-# #             else:
-# #                 print(f"Head token of `{full_tokens[ix]['mod_lemma']}` not an anchor dependent from which to inherit full anchor lemma.")
-#     #print("\nModified tokens:", tokens)
-#     return tokens
 
 def get_frame_tuples(doc_frames):
     """Assumes unigrams"""
