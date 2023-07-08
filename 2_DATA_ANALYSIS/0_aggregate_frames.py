@@ -9,6 +9,7 @@ import argparse
 from tqdm import tqdm, trange
 from collections import Counter, defaultdict
 import sys
+import time
 
 feat_lists = glob.glob('feature_dicts/*.txt')
 feat_dict = {}
@@ -67,7 +68,7 @@ def _score_dict_feat(frames,feat='filtered_liwc_posemo',return_matches=True,norm
     else:
         return score
 
-def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_every=10000):
+def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_every=500000):
     
     print("\nAggregating features into framing dimensions using dictionaries...")
     if add_to_cache:
@@ -115,12 +116,14 @@ def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_e
             
         if _ % save_every == 0:
             print("\tSaving aggregated features dict...")
+            start_time = time.time()
             dill.dump(agg_feats_per_review, open(os.path.join(out_dir, "aggregated_frames_lookup.dill"), 'wb'))
-            print("\t\tDone!")
+            print(f"\t\tDone! Elapsed time: {(time.time()-start_time)/60} minutes.")
     
     print("\tSaving aggregated features dict...")
+    start_time = time.time()
     dill.dump(agg_feats_per_review, open(os.path.join(out_dir, "aggregated_frames_lookup.dill"), 'wb'))
-    print("\t\tDone!")
+    print(f"\t\tDone! Elapsed time: {(time.time()-start_time)/60} minutes.")
     
 def main(path_to_lookup, out_dir, add_to_cache, debug):
     anchors_dict = load_anchor_sets()
