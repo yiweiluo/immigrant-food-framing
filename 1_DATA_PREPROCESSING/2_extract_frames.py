@@ -315,11 +315,14 @@ def create_frames_lookup(lemmas_per_review, out_dir, debug):
     return D
     
 def main(path_to_df, path_to_parsed, out_dir, guid, start_batch_no, end_batch_no, from_cache, debug):
-    raw_df = load_raw_df(path_to_df)
-    parsed_docs, batch_size = load_parsed_docs(path_to_parsed)
-    batched_df = batch_df(raw_df, batch_size)
-    lemmas_per_review = extract_all_frames(batched_df, parsed_docs, path_to_parsed, out_dir, batch_size, from_cache, 
-                                           start_batch_no=start_batch_no, end_batch_no=end_batch_no, guid=guid)
+    if not from_cache:
+        raw_df = load_raw_df(path_to_df)
+        parsed_docs, batch_size = load_parsed_docs(path_to_parsed)
+        batched_df = batch_df(raw_df, batch_size)
+        lemmas_per_review = extract_all_frames(batched_df, parsed_docs, path_to_parsed, out_dir, batch_size, from_cache, 
+                                               start_batch_no=start_batch_no, end_batch_no=end_batch_no, guid=guid)
+    else:
+        lemmas_per_review = extract_all_frames(None, None, None, out_dir, None, from_cache)
     create_frames_lookup(lemmas_per_review, out_dir, debug)
     print("\n\nAll done!")
     
