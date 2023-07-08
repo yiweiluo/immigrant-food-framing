@@ -133,7 +133,7 @@ def load_raw_reviews(path_to_raw_reviews):
     print(f"\tRead in {len(raw_df)} reviews.")
     
     print("\nGetting review lengths...")
-    raw_df['len'] = raw_df['text'].apply(lambda x: len(x.split()))
+    raw_df['len'] = raw_df['text'].apply(lambda x: len(x.split( )) if type(x) == str else 0)
     print("\tDone! Review length distribution:")
     print(raw_df['len'].describe())
     
@@ -143,7 +143,7 @@ def get_filtered_business_reviews(filtered_restaurant_data, raw_reviews):
     """Get IDs of reviews associated with filtered restaurants"""
     
     print(f"\nGetting review IDs associated with {len(filtered_restaurant_data)} filtered restaurants...")
-    review_ids = raw_reviews.loc[raw_reviews['review_id'].isin(set(filtered_restaurant_data['business_id'].values))]['review_id'].values
+    review_ids = raw_reviews.loc[raw_reviews['business_id'].isin(set(filtered_restaurant_data['business_id'].values))]['review_id'].values
     print(f"\tDone! Found {len(review_ids)} reviews.")
     print("Sample review IDs:", review_ids[:5])
 
@@ -188,8 +188,9 @@ def create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, 
     return reviews_df
 
 def hydrate_reviews_with_biz_data(reviews_df):
+    pass
     
-def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
+def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, out_dir, debug):
     restaurants = prep_census_enriched_df(path_to_enriched_df)
     filtered_restaurants = filter_businesses_for_regression(restaurants)
     raw_reviews = load_raw_reviews(path_to_raw_reviews)
@@ -208,25 +209,16 @@ if __name__ == "__main__":
                         help='where to read in framing scores from')
     parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only/spacy_processed',
                         help='directory to save output to')
-    parser.add_argument('--text_fields', type=str, default='text',
-                        help='column name(s) for text fields')
-    parser.add_argument('--batch_size', type=int, default=5000,
-                        help='batch size for spaCy')
-    parser.add_argument('--start_batch_no', type=int, default=0, 
-                        help='batch number to start at')
-    parser.add_argument('--end_batch_no', type=int, default=2000,
-                        help='batch number to end before (non-inclusive)')
     parser.add_argument('--debug', action='store_true',
                         help='whether to run on subset of data for debugging purposes')
     args = parser.parse_args()
     if not args.debug:
         print("\n******WARNING****** DEBUG MODE OFF!")
     else:
-        print("\nRunning in debug mode; will limit to processing first batch of texts with batch size of 10.")
-        args.start_batch_no, args.end_batch_no, args.batch_size = 0, 1, 10
+        print("\nRunning in debug mode; will limit dataframe creation to reviews for which framing scores are available.")
     
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
         
-    main(args.path_to_enriched_df, args.path_to_raw_reviews, args.path_to_framing_scores, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug)
+    main(args.path_to_enriched_df, args.path_to_raw_reviews, args.path_to_framing_scores, args.out_dir, args.debug)
     
