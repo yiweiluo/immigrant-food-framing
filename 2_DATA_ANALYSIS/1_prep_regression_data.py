@@ -1,30 +1,88 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import os, glob
+import os, glob, json
 import pickle
 import pandas as pd
 import argparse
-import spacy
-from spacy.tokens import DocBin, Doc
 from tqdm import tqdm, trange
 from collections import Counter, defaultdict
-import re
-import time
 
-spacy.prefer_gpu()
-nlp = spacy.load("en_core_web_lg")
-nlp.add_pipe('coreferee')
+REGIONS = {'us','europe','latin_america','asia'}
+CHAIN_THRESHOLD = 1
 
-def load_df(path_to_df, debug, start_batch_no, end_batch_no, batch_size):
-    file_sep = ',' if path_to_df.endswith('.csv') else '\t'
-    print(f"\nReading in lines {start_batch_no*batch_size} to {start_batch_no*batch_size+(end_batch_no-start_batch_no)*batch_size} of df...")
-    df = pd.read_csv(path_to_df, sep=file_sep, skiprows=range(1,start_batch_no*batch_size+1), nrows=(end_batch_no-start_batch_no)*batch_size)#, index_col=0)
-    if 'og_index' not in df.columns:
-        print("\tNo OG index found; adding original index to keep track of batches...")
-        df['og_index'] = list(range(len(df)))
-        
-    print(f"\tDone! Start, end indices: ({df['og_index'].values[0]}, {df['og_index'].values[-1]})")
+def _is_restaurant(cat_set, search_set={'restaurants','food'}):
+    return len(cat_set.intersection(search_set)) > 0
+
+def _clean_list(l):
+    return [x.lower().strip() for x in l if x is not None]
+
+def _is_homogeneous(continents, verbose=False):
+    if verbose:
+        print(set(continents))
+    if 'fusion' in continents:
+        return 'fusion'
+    return 'homo' if len(set(continents)) == 1 else 'hetero'
+
+def prep_census_enriched_df(path_to_enriched_df):
+    restaurant_data = pd.read_csv(path_to_enriched_df,index_col=0)
+    print(f"Read in census enriched business data with {len(restaurant_data)} rows.")
+
+    # Filter to restaurant data
+    restaurant_data['categories'] = restaurant_data['categories'].apply(lambda x: x.split(',') if type(x) == str else [])
+    restaurant_data['categories'] = restaurant_data['categories'].apply(lambda x: set(_clean_list(x)))
+    restaurant_data = restaurant_data.loc[restaurant_data['categories'].apply(lambda x: _is_restaurant(x) == True)].copy()
+    print(f"\nFiltered to restaurant data with {len(restaurant_data)} rows.")
+
+    # Annotate for racial demographics
+    restaurant_data['total_pop'] = restaurant_data['Population of one race'] + restaurant_data['Population of two or more races']
+    restaurant_data['pct_asian'] = restaurant_data['Population of one race: Asian alone'] / restaurant_data['total_pop']
+
+    # Annotate for continent
+    ethnic_cats_per_continent = pd.read_csv('../ethnic_cats_per_continent.csv')
+    ethnic_cats_per_continent = ethnic_cats_per_continent.loc[ethnic_cats_per_continent['region'].isin(REGIONS)]
+    ethnic_cat2continent = dict(zip(ethnic_cats_per_continent['cuisine'],ethnic_cats_per_continent['region']))
+    print(f"\nAnnotating for the following geographic regions: {REGIONS}")
+#     print(ethnic_cats_per_continent['region'].value_counts())
+    restaurant_data['continents'] = restaurant_data['categories'].apply(
+        lambda x: [ethnic_cat2continent[cat] for cat in x if cat in ethnic_cat2continent])
+    restaurant_data['is_homogeneous_or_fusion'] = restaurant_data['continents'].apply(lambda x: _is_homogeneous(x))
+    print("\nDistribution of regionally homogeneous or fusion restaurants:")
+    print(restaurant_data['is_homogeneous_or_fusion'].value_counts())
+
+    # Annotate for price level
+    print("\nAnnotating for price level...")
+    biz2price = {}
+    for _,row in tqdm(restaurant_data.iterrows()):
+        biz_id = row['business_id']
+        if type(row['attributes']) == str:
+            attrs = json.loads(row['attributes'].replace("\'",'"').replace('"u"','"').replace('u"','"').replace('""','"')\
+                                                .replace(': "{',': {').replace('}",','},').replace('}"}','}}')\
+                                                .replace('False','false').replace('True','true').replace('None','false'))
+            try:
+                price = attrs['RestaurantsPriceRange2']
+            except KeyError:
+                try:
+                    price = attrs['RestaurantsPriceRange1']
+                except KeyError:
+                    price = None
+        else:
+            price = None
+        biz2price[biz_id] = price
+    restaurant_data['price_level'] = restaurant_data['business_id'].apply(lambda x: biz2price[x])
+    print(restaurant_data['price_level'].value_counts(normalize=True).sort_values('index'))
+    print()
+
+    # Annotate for whether a restaurant is a chain
+    print(f"\nAnnotating for chains using threshold of >{CHAIN_THRESHOLD}...")
+    restaurant_counts = restaurant_data['name'].value_counts()
+    chain_names = set([r for r in restaurant_counts.index if restaurant_counts[r] > CHAIN_THRESHOLD])
+    chain_ids = set(restaurant_data.loc[restaurant_data['name'].isin(set(chain_names))]['business_id'].values)
+    restaurant_data['is_chain'] = restaurant_data['business_id'].apply(lambda x: x in chain_ids)
+    print(restaurant_data['is_chain'].value_counts())
+    print(list(restaurant_data.columns))
+    print(restaurant_data.head())
+    
     return df
 
 def batch_df(df, batch_size):
@@ -101,16 +159,16 @@ def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, t
             print("Coref results:", docs[0]._.coref_chains)
             break
     
-def main(path_to_dataset, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
-    texts = load_df(path_to_dataset, debug, start_batch_no, end_batch_no, batch_size)
-    reviews = batch_df(texts, batch_size)
-    batch_spacy_process(out_dir, texts, start_batch_no, end_batch_no, batch_size, text_fields=text_fields, debug=debug)
+def main(path_to_enriched_df, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
+    restaurants = prep_census_enriched_df(path_to_enriched_df)
+    #reviews = batch_df(texts, batch_size)
+    #batch_spacy_process(out_dir, texts, start_batch_no, end_batch_no, batch_size, text_fields=text_fields, debug=debug)
     
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path_to_texts', type=str, default='../data/yelp/restaurants_only/restaurant_reviews_df.csv',
-                        help='where to read in texts dataframe from')
+    parser.add_argument('--path_to_enriched_df', type=str, default='',
+                        help='where to read in census enriched dataframe from')
     parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only/spacy_processed',
                         help='directory to save output to')
     parser.add_argument('--text_fields', type=str, default='text',
@@ -133,5 +191,5 @@ if __name__ == "__main__":
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
         
-    main(args.path_to_texts, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug)
+    main(args.path_to_enriched_df, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug)
     
