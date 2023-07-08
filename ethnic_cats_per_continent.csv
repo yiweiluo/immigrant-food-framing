@@ -1,0 +1,98 @@
+cuisine,region
+american (traditional),us
+american (new),us
+mexican,latin_america
+italian,europe
+chinese,asia
+japanese,asia
+asian fusion,fusion
+mediterranean,europe
+southern,us
+thai,asia
+cajun/creole,us
+tex-mex,fusion
+vietnamese,asia
+indian,asia
+latin american,latin_america
+greek,europe
+caribbean,fusion
+middle eastern,middle_east
+french,europe
+korean,asia
+spanish,europe
+cuban,latin_america
+canadian (new),-1
+pakistani,asia
+irish,europe
+hawaiian,us
+modern european,europe
+german,europe
+african,africa
+szechuan,asia
+new mexican cuisine,us
+filipino,asia
+puerto rican,latin_america
+cantonese,asia
+turkish,asia
+lebanese,middle_east
+peruvian,latin_america
+taiwanese,asia
+brazilian,latin_america
+british,europe
+pan asian,asia
+colombian,latin_america
+ethiopian,africa
+salvadoran,latin_america
+moroccan,africa
+venezuelan,latin_america
+laotian,asia
+dominican,latin_america
+afghan,asia
+polish,eastern_europe
+russian,eastern_europe
+persian/iranian,middle_east
+basque,europe
+arabic,middle_east
+mongolian,asia
+argentine,latin_america
+portuguese,europe
+malaysian,asia
+belgian,europe
+honduran,latin_america
+indonesian,asia
+himalayan/nepalese,asia
+haitian,latin_america
+burmese,asia
+cambodian,asia
+ukrainian,eastern_europe
+trinidadian,latin_america
+shanghainese,asia
+sicilian,europe
+egyptian,africa
+armenian,asia
+bangladeshi,asia
+australian,australia
+scandinavian,europe
+iberian,europe
+singaporean,asia
+syrian,middle_east
+uzbek,asia
+tuscan,europe
+international,-1
+hungarian,eastern_europe
+czech,eastern_europe
+south african,africa
+senegalese,africa
+nicaraguan,latin_america
+hong kong style cafe,asia
+scottish,europe
+austrian,eastern_europe
+sardinian,europe
+georgian,asia
+sri lankan,asia
+oriental,asia
+hakka,asia
+eastern european,eastern_europe
+somali,africa
+israeli,middle_east
+soul food,us
