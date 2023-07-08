@@ -67,7 +67,7 @@ def _score_dict_feat(frames,feat='filtered_liwc_posemo',return_matches=True,norm
     else:
         return score
 
-def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug):
+def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_every=10000):
     
     print("\nAggregating features into framing dimensions using dictionaries...")
     if add_to_cache:
@@ -112,6 +112,11 @@ def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug):
             dill.dump(agg_feats_per_review, open(os.path.join(out_dir, "test_aggregated_frames_lookup.dill"), 'wb'))
             print("\t\tDone!")
             sys.exit()
+            
+        if _ % save_every == 0:
+            print("\tSaving aggregated features dict...")
+            dill.dump(agg_feats_per_review, open(os.path.join(out_dir, "aggregated_frames_lookup.dill"), 'wb'))
+            print("\t\tDone!")
     
     print("\tSaving aggregated features dict...")
     dill.dump(agg_feats_per_review, open(os.path.join(out_dir, "aggregated_frames_lookup.dill"), 'wb'))
