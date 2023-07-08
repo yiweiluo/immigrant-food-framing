@@ -184,11 +184,16 @@ def create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, 
     savename = os.path.join(out_dir, 'per_reviews_df.pkl')
     print("Saving reviews df to:", savename)
     per_review_df.to_pickle(savename)
+    print("\tDone!")
     
     return reviews_df
 
 def hydrate_reviews_with_biz_data(reviews_df):
     pass
+
+    print("\nCuisine distribution in review data:")
+    for cuisine in TOP_CUISINES:
+        print(cuisine, len(per_review_df.loc[per_review_df['categories'].apply(lambda x: cuisine in x)]))
     
 def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, out_dir, debug):
     restaurants = prep_census_enriched_df(path_to_enriched_df)
