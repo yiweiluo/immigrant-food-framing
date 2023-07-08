@@ -151,6 +151,7 @@ def get_filtered_business_reviews(filtered_restaurant_data, raw_reviews):
 
 def create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, debug):
     review_id2len = dict(zip(raw_reviews['review_id'], raw_reviews['len']))
+    review_id2biz_id = dict(zip(raw_reviews['review_id'], raw_reviews['business_id']))
     
     print(f"\nLoading in framing scores dict to create reviews df...")
     start = time.time()
@@ -169,6 +170,7 @@ def create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, 
     for review_id in tqdm(review_ids_for_df):
         per_review_df['review_id'].append(review_id)
         per_review_df['review_len'].append(review_id2len[review_id])
+        per_review_df['biz_id'].append(review_id2biz_id[review_id])
         
         # Add framing scores
         for feat in framing_scores_lookup[review_id]:
@@ -188,12 +190,26 @@ def create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, 
     
     return reviews_df
 
-def hydrate_reviews_with_biz_data(reviews_df):
-    pass
-
+def hydrate_reviews_with_biz_data(restaurants_df, reviews_df, out_dir):
+    print("\nHydrating reviews df with restaurant-related fields...")
+    biz_id2fields = {}
+    for field in ['stars','price_level','income','racial_diversity','pct_asian','Percentage Hispanic',
+                  'cuisine_region','cuisines']:
+        biz_id2fields[field] = dict(zip(restaurants_df['business_id'], restaurants_df[field]))
+        reviews_df[f"biz_{field}"] = reviews_df['biz_id'].apply(lambda x: biz_id2fields[field][x])
+    print("\tDone! New reviews_df columns:", reviews_df.columns)
+    print("\nCuisine region distribution:")
+    print(reviews_df['cuisine_region'].value_counts())
     print("\nCuisine distribution in review data:")
     for cuisine in TOP_CUISINES:
-        print(cuisine, len(per_review_df.loc[per_review_df['categories'].apply(lambda x: cuisine in x)]))
+        print(cuisine, len(per_review_df.loc[per_review_df['cuisines'].apply(lambda x: cuisine in x)]))
+        
+    savename = os.path.join(out_dir, 'per_reviews_df.pkl')
+    print(f"\nSaving hydrated df to: {savename}...")
+    reviews_df.to_pickle(savename)
+    print("\tDone!")
+    
+    return reviews_df
     
 def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, out_dir, debug):
     restaurants = prep_census_enriched_df(path_to_enriched_df)
@@ -201,7 +217,7 @@ def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, out_d
     raw_reviews = load_raw_reviews(path_to_raw_reviews)
     review_ids = get_filtered_business_reviews(filtered_restaurants, raw_reviews)
     reviews_df = create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, debug)
-    hydrated_reviews_df = hydrate_reviews_with_biz_data(reviews_df)
+    hydrated_reviews_df = hydrate_reviews_with_biz_data(filtered_restaurants, reviews_df, out_dir)
     
 if __name__ == "__main__":
     
