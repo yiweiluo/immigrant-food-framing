@@ -176,7 +176,8 @@ def create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, 
         for feat in framing_scores_lookup[review_id]:
             for anchor_type in framing_scores_lookup[review_id][feat]:
                 score, matches = framing_scores_lookup[review_id][feat][anchor_type]
-                json_matches = json.dumps(matches) if matches != -1 else -1
+                if type(matches) == Counter:
+                    matches = json.dumps(matches) if matches != -1 else -1
                 per_review_df[f"{feat}_{anchor_type}_score"].append(score)
                 per_review_df[f"{feat}_{anchor_type}_matches"].append(matches)
         
@@ -192,17 +193,32 @@ def create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, 
 
 def hydrate_reviews_with_biz_data(restaurants_df, reviews_df, out_dir):
     print("\nHydrating reviews df with restaurant-related fields...")
+    field2col_name = {'median_nb_income': 'Median household income in the past 12 months (2020 inflation-adjusted dollars)',
+                      'median_nb_diversity': '',
+                      'mean_star_rating': 'stars',
+                      'price_point': 'price_level',
+                      'nb_pct_asian': 'pct_asian',
+                      'nb_pct_hisp': 'Percentage Hispanic',
+                      'cuisine_region': 'continents',
+                      'cuisines': 'categories'}
     biz_id2fields = {}
-    for field in ['stars','price_level','income','racial_diversity','pct_asian','Percentage Hispanic',
-                  'cuisine_region','cuisines']:
-        biz_id2fields[field] = dict(zip(restaurants_df['business_id'], restaurants_df[field]))
+    for field in field2col_name:
+        if field == 'cuisines':
+            biz_id2fields[field] = dict(zip(restaurants_df['business_id'], 
+                                            restaurants_df[field].apply(lambda x: set(x).intersection(TOP_CUISINES))))
+        elif field == 'cuisine_region':
+            biz_id2fields[field] = dict(zip(restaurants_df['business_id'], 
+                                            restaurants_df[field].apply(lambda x: x[0] if len(set(x)) == 1
+                                                                                  else 'fusion')))
+        else:
+            biz_id2fields[field] = dict(zip(restaurants_df['business_id'], restaurants_df[field2col_name[field]]))
         reviews_df[f"biz_{field}"] = reviews_df['biz_id'].apply(lambda x: biz_id2fields[field][x])
     print("\tDone! New reviews_df columns:", reviews_df.columns)
     print("\nCuisine region distribution:")
-    print(reviews_df['cuisine_region'].value_counts())
+    print(reviews_df['biz_cuisine_region'].value_counts())
     print("\nCuisine distribution in review data:")
     for cuisine in TOP_CUISINES:
-        print(cuisine, len(per_review_df.loc[per_review_df['cuisines'].apply(lambda x: cuisine in x)]))
+        print(cuisine, len(reviews_df.loc[reviews_df['biz_cuisines'].apply(lambda x: cuisine in x)]))
         
     savename = os.path.join(out_dir, 'per_reviews_df.pkl')
     print(f"\nSaving hydrated df to: {savename}...")
