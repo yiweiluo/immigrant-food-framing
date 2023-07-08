@@ -31,6 +31,8 @@ def _is_homogeneous(continents, verbose=False):
     return 'homo' if len(set(continents)) == 1 else 'hetero'
 
 def prep_census_enriched_df(path_to_enriched_df):
+    """Read in business data with census data-enriched demographic fields; then annotate with additional fields and subset to restaurants."""
+    
     restaurant_data = pd.read_csv(path_to_enriched_df,index_col=0)
     print(f"\nRead in census enriched business data from {path_to_enriched_df} with {len(restaurant_data)} rows.")
 
@@ -90,6 +92,8 @@ def prep_census_enriched_df(path_to_enriched_df):
     return restaurant_data
 
 def filter_businesses_for_regression(restaurant_data):
+    """Filter restaurant data"""
+    
     print(f"\nFiltering from {len(restaurant_data)} total restaurants for regression...")
     
     print("\tExcluding chains...")
@@ -120,23 +124,47 @@ def filter_businesses_for_regression(restaurant_data):
 
     return dat
 
-def create_reviews_df(filtered_restaurant_data):
+def load_raw_reviews(path_to_raw_reviews):
+    """Load raw reviews to get review-business relationships and review lengths."""
+    
+    print("\nLoading in raw reviews...")
+    file_sep = ',' if path_to_raw_reviews.endswith('.csv') else '\t'
+    raw_df = pd.read_csv(path_to_raw_reviews, sep=file_sep)
+    print(f"\tDone! Read in {len(df)} reviews.")
+    return raw_df
+
+def _get_filtered_business_reviews(filtered_restaurant_data, raw_reviews):
+    """Get IDs of reviews associated with filtered restaurants"""
+    
+    print("\nLoading in raw reviews...")
+    file_sep = ',' if path_to_raw_reviews.endswith('.csv') else '\t'
+    df = pd.read_csv(path_to_raw_reviews, sep=file_sep)
+    print("\n\tRead in df with shape:", raw_reviews.shape)
+    print("\tDone!")
+    return df
+
+    return review_ids
+
+def create_reviews_df(review_ids):
     # TODO: get reviews associated with filtered businesses
     # hydrate with all fields
     
     return reviews_df
 
     
-def main(path_to_enriched_df, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
+def main(path_to_enriched_df, path_to_raw_reviews, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
     restaurants = prep_census_enriched_df(path_to_enriched_df)
     filtered_restaurants = filter_businesses_for_regression(restaurants)
-    create_reviews_df(filtered_restaurants)
+    raw_reviews = load_raw_reviews(path_to_raw_reviews)
+    #create_reviews_df(filtered_restaurants, raw_reviews)
     
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--path_to_enriched_df', type=str, default='../data/yelp/census_enriched_business_data.csv',
                         help='where to read in census enriched dataframe from')
+    parser.add_argument('--path_to_raw_reviews', type=str, default='../data/yelp/restaurants_only/restaurant_reviews_df.csv',
+                        help='where to read in raw reviews dataframe from')
     parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only/spacy_processed',
                         help='directory to save output to')
     parser.add_argument('--text_fields', type=str, default='text',
@@ -159,5 +187,5 @@ if __name__ == "__main__":
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
         
-    main(args.path_to_enriched_df, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug)
+    main(args.path_to_enriched_df, args.path_to_raw_reviews, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug)
     
