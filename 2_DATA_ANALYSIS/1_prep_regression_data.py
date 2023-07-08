@@ -2,12 +2,12 @@
 # coding: utf-8
 
 import os, glob, json
-import pickle
+import pickle, dill
 import pandas as pd
 import argparse
 from tqdm import tqdm, trange
 from collections import Counter, defaultdict
-
+import time
 
 CHAIN_THRESHOLD = 1
 CATEGORIES_TO_EXCLUDE = {'cafe','fast food'}
@@ -131,6 +131,7 @@ def load_raw_reviews(path_to_raw_reviews):
     file_sep = ',' if path_to_raw_reviews.endswith('.csv') else '\t'
     raw_df = pd.read_csv(path_to_raw_reviews, sep=file_sep)
     print(f"\tRead in {len(raw_df)} reviews.")
+    
     print("\nGetting review lengths...")
     raw_df['len'] = raw_df['text'].apply(lambda x: len(x.split()))
     print("\tDone! Review length distribution:")
@@ -148,76 +149,53 @@ def get_filtered_business_reviews(filtered_restaurant_data, raw_reviews):
 
     return review_ids
 
-def _hydrate_with_biz_data():
-
-def create_reviews_df(review_ids_for_df, raw_reviews):
+def create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, debug):
     review_id2len = dict(zip(raw_reviews['review_id'], raw_reviews['len']))
     
+    print(f"\nLoading in framing scores dict to create reviews df...")
+    start = time.time()
+    framing_scores_lookup = dill.load(open(path_to_framing_scores,'rb'))
+    print(f"\tDone! Read in dict of length {len(framing_scores_lookup)}. Elapsed time: {(time.time()-start)/60} minutes.")
+    
+    if debug:
+        review_ids_for_df = framing_scores_lookup.keys()
+        print(f"Debug mode ON; limiting to {len(review_ids_for_df)} review IDs for which framing scores are available.")
+    else:
+        review_ids_for_df = review_ids
+        print(f"Debug mode OFF; using all {len(review_ids_for_df)} review IDs.")
+    
+    print("Now making reviews df...")
     per_review_df = defaultdict(list)                        
- 
     for review_id in tqdm(review_ids_for_df):
         per_review_df['review_id'].append(review_id)
-        per_review_df['review_len'].append()
-        review_frames = frames_lookup[review_id]
-        for feat in set(avail_feats).difference(to_ignore):
-            full_agg_score = 0
-            full_agg_matches = Counter()
-            no_neg_agg_score = 0
-            no_neg_agg_matches = Counter()
-            for anchor_type in ['food','service','establishment']:
-                anchor_frames = [x for x in review_frames
-                                 if x[2].replace('_',' ') in anchor_type2anchors[anchor_type]
-                                 or x[3].replace('_',' ') in anchor_type2anchors[anchor_type]]
-    #             anchor_min_bf_frames = [x for x in anchor_frames 
-    #                                     if (x[1] in frame_freqs_lookup)
-    #                                     and (frame_freqs_lookup[x[1]][anchor_type]['biz'] >= min_biz_freq)]
-                anchor_frames_with_neg = [x[1] for x in anchor_frames]
-                anchor_frames_no_neg = [x[1] for x in anchor_frames
-                                        if len(set(x[0].split(',')).intersection(NEGATIONS)) == 0]
-                full_res = score_dict_feat(anchor_frames_with_neg, feat=feat)
-                full_score = full_res[0]
-                full_matches = full_res[1]
-    #                 per_review_df[f"{anchor_type}_{feat}_score"].append(score)
-    #                 per_review_df[f"{anchor_type}_{feat}_matches"].append(matches)
-                full_agg_score += full_score
-                full_agg_matches += full_matches
-                no_neg_res = score_dict_feat(anchor_frames_no_neg, feat=feat)
-                no_neg_score = no_neg_res[0]
-                no_neg_matches = no_neg_res[1]
-    #                 per_review_df[f"{anchor_type}_{feat}_score"].append(score)
-    #                 per_review_df[f"{anchor_type}_{feat}_matches"].append(matches)
-                no_neg_agg_score += no_neg_score
-                no_neg_agg_matches += no_neg_matches
-            per_review_df[f"agg_{feat}_score"].append(full_agg_score)
-            per_review_df[f"agg_{feat}_matches"].append(full_agg_matches)
-            per_review_df[f"no_neg_agg_{feat}_score"].append(no_neg_agg_score)
-            per_review_df[f"no_neg_agg_{feat}_matches"].append(no_neg_agg_matches)
-
-    #         per_review_df['biz_id'].append(biz_key)
-    #         per_review_df['biz_mean_star_rating'].append(stars)
-    #         per_review_df['biz_price_level'].append(price_level)
-    #         per_review_df['biz_median_nb_income'].append(nb_income)
-    #         per_review_df['biz_nb_diversity'].append(nb_diversity)
-    #         per_review_df['biz_cuisines'].append(cuisines)
-    #         per_review_df['biz_region'].append(region)
-    #     i += 1
-    #     if i > 20:
-    #         break
-
-    per_review_df = pd.DataFrame(per_review_df)             
-    display(per_review_df.head())                          
-    print(len(per_review_df))  
-    per_review_df.to_pickle('per_review_df.pkl')
+        per_review_df['review_len'].append(review_id2len[review_id])
+        
+        # Add framing scores
+        for feat in framing_scores_lookup[review_id]:
+            for anchor_type in framing_scores_lookup[review_id][feat]:
+                score, matches = framing_scores_lookup[review_id][feat][anchor_type]
+                json_matches = json.dumps(matches) if matches != -1 else -1
+                per_review_df[f"{feat}_{anchor_type}_score"].append(score)
+                per_review_df[f"{feat}_{anchor_type}_matches"].append(matches)
+        
+    per_review_df = pd.DataFrame(per_review_df)    
+    print("\tCreated reviews df with shape:", per_review_df.shape)
+    print(per_review_df.head())   
+    savename = os.path.join(out_dir, 'per_reviews_df.pkl')
+    print("Saving reviews df to:", savename)
+    per_review_df.to_pickle(savename)
     
     return reviews_df
 
+def hydrate_reviews_with_biz_data(reviews_df):
     
-def main(path_to_enriched_df, path_to_raw_reviews, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
+def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
     restaurants = prep_census_enriched_df(path_to_enriched_df)
     filtered_restaurants = filter_businesses_for_regression(restaurants)
     raw_reviews = load_raw_reviews(path_to_raw_reviews)
     review_ids = get_filtered_business_reviews(filtered_restaurants, raw_reviews)
-    #create_reviews_df(filtered_restaurants, raw_reviews)
+    reviews_df = create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, debug)
+    hydrated_reviews_df = hydrate_reviews_with_biz_data(reviews_df)
     
 if __name__ == "__main__":
     
@@ -226,6 +204,8 @@ if __name__ == "__main__":
                         help='where to read in census enriched dataframe from')
     parser.add_argument('--path_to_raw_reviews', type=str, default='../data/yelp/restaurants_only/restaurant_reviews_df.csv',
                         help='where to read in raw reviews dataframe from')
+    parser.add_argument('--path_to_framing_scores', type=str, default='../data/yelp/restaurants_only/aggregated_frames_lookup.dill',
+                        help='where to read in framing scores from')
     parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only/spacy_processed',
                         help='directory to save output to')
     parser.add_argument('--text_fields', type=str, default='text',
@@ -248,5 +228,5 @@ if __name__ == "__main__":
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
         
-    main(args.path_to_enriched_df, args.path_to_raw_reviews, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug)
+    main(args.path_to_enriched_df, args.path_to_raw_reviews, args.path_to_framing_scores, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug)
     
