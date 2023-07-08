@@ -43,7 +43,6 @@ def prep_census_enriched_df(path_to_enriched_df):
     ethnic_cats_per_continent = ethnic_cats_per_continent.loc[ethnic_cats_per_continent['region'].isin(REGIONS)]
     ethnic_cat2continent = dict(zip(ethnic_cats_per_continent['cuisine'],ethnic_cats_per_continent['region']))
     print(f"\nAnnotating for the following geographic regions: {REGIONS}")
-#     print(ethnic_cats_per_continent['region'].value_counts())
     restaurant_data['continents'] = restaurant_data['categories'].apply(
         lambda x: [ethnic_cat2continent[cat] for cat in x if cat in ethnic_cat2continent])
     restaurant_data['is_homogeneous_or_fusion'] = restaurant_data['continents'].apply(lambda x: _is_homogeneous(x))
@@ -70,8 +69,7 @@ def prep_census_enriched_df(path_to_enriched_df):
             price = None
         biz2price[biz_id] = price
     restaurant_data['price_level'] = restaurant_data['business_id'].apply(lambda x: biz2price[x])
-    print(restaurant_data['price_level'].value_counts(normalize=True).sort_values('index'))
-    print()
+    print(restaurant_data['price_level'].value_counts(normalize=True).sort_index())
 
     # Annotate for whether a restaurant is a chain
     print(f"\nAnnotating for chains using threshold of >{CHAIN_THRESHOLD}...")
@@ -80,10 +78,10 @@ def prep_census_enriched_df(path_to_enriched_df):
     chain_ids = set(restaurant_data.loc[restaurant_data['name'].isin(set(chain_names))]['business_id'].values)
     restaurant_data['is_chain'] = restaurant_data['business_id'].apply(lambda x: x in chain_ids)
     print(restaurant_data['is_chain'].value_counts())
-    print(list(restaurant_data.columns))
+    print()
     print(restaurant_data.head())
     
-    return df
+    return restaurant_data
 
 def batch_df(df, batch_size):
     df['batch_no'] = [int(x/batch_size) for x in df.index]
