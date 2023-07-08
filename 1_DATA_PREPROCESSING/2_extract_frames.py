@@ -128,7 +128,7 @@ def extract_all_frames(
     print("\nExtracting frames from all parsed docs...")
     
     # I/O 
-    out_dir_ = os.path.join(out_dir, 
+    out_dir_ = os.path.join(out_dir, 'tmp',
                            f"dishnames={anchor_set.split('/')[-1].split('.')[0] if type(anchor_set)!=set else ','.join(anchor_set)}",
                            f"dependent-tags={','.join(sorted(list(pos_tags))) if type(pos_tags)==set else pos_tags}")
     if not os.path.exists(out_dir_):
