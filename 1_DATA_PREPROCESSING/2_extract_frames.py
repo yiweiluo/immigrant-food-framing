@@ -48,9 +48,10 @@ def batch_df(df, batch_size):
 def load_parsed_docs(path_to_parsed):
     print("\nLoading parsed review docs...")
     all_batches = glob.glob(path_to_parsed+'/*.spacy')
-    print(path_to_parsed+'/*.spacy')
-    print(f"\tDone! Loaded {len(all_batches)} batches of docs.")
-    return all_batches
+    doc_bin = DocBin().from_disk(all_batches[0])
+    docs = list(doc_bin.get_docs(nlp_spacy.vocab))
+    print(f"\tDone! Loaded {len(all_batches)} batches of docs of batch size {len(docs)}.")
+    return all_batches, len(docs)
 
 def get_attrs(doc, adj_tok, anchor=None):
     """Get text, lemma, ngram window, advmods etc. for a given (adj, anchor) framing instance"""
@@ -164,7 +165,12 @@ def extract_all_frames(
             
         # Iterate over processed batches
         print(f"\nRetrieving (dependent, anchor) ngrams...")
-        for batch_no in trange(start_batch_no, len(all_batches)):
+        max_batches_avail = len(all_batches)
+        if end_batch_no > max_batches_avail:
+            print(f"\tSpecific end_batch_no {end_batch_no} exceeds max batches available ({max_batches_avail}), using that as endpoint instead...")
+        else:
+            print(f"\tUsing end_batch_no {end_batch_no} as endpoint...")
+        for batch_no in trange(start_batch_no, min(max_batches_avail, end_batch_no)):
                 
             out_fname = os.path.join(path_to_parsed, f'{batch_no}.spacy')
             reviews_batch = batched_df.get_group(batch_no)
@@ -181,7 +187,6 @@ def extract_all_frames(
                     print("Review text:", row['text'][:50])
                 
                 full_tokens = extract_frames_from_doc(doc, pos_tag_set=pos_tags)
-                print("Extracted frames:", full_tokens)
                 
                 if row['og_index'] % print_every == 0:
                     all_tup_ixs = set([full_tokens[key]['mod']['mod_ix'] for key in full_tokens 
@@ -384,8 +389,8 @@ def create_frames_lookup(lemmas_per_review, out_dir, debug):
     
 def main(path_to_df, path_to_parsed, out_dir, guid, start_batch_no, end_batch_no, from_cache, debug):
     raw_df = load_raw_df(path_to_df)
+    parsed_docs, batch_size = load_parsed_docs(path_to_parsed)
     batched_df = batch_df(raw_df, batch_size)
-    parsed_docs = load_parsed_docs(path_to_parsed)
     lemmas_per_review = extract_all_frames(batched_df, parsed_docs, path_to_parsed, out_dir, batch_size, from_cache, 
                                            start_batch_no=start_batch_no, end_batch_no=end_batch_no, guid=guid)
     create_frames_lookup(lemmas_per_review, out_dir, debug)
@@ -404,7 +409,7 @@ if __name__ == "__main__":
                         help='field to use for GUID in raw data df')
     parser.add_argument('--start_batch_no', type=int, default=0,
                         help='start batch index')
-    parser.add_argument('--end_batch_no', type=int, default=1026,
+    parser.add_argument('--end_batch_no', type=int, default=1025,
                         help='end batch index (non-inclusive)')
     parser.add_argument('--from_cache', action='store_true',
                         help='whether to load extracted ngrams from cache')
