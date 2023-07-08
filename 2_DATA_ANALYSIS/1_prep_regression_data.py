@@ -130,18 +130,16 @@ def load_raw_reviews(path_to_raw_reviews):
     print("\nLoading in raw reviews...")
     file_sep = ',' if path_to_raw_reviews.endswith('.csv') else '\t'
     raw_df = pd.read_csv(path_to_raw_reviews, sep=file_sep)
-    print(f"\tDone! Read in {len(df)} reviews.")
+    print(f"\tDone! Read in {len(raw_df)} reviews.")
     return raw_df
 
-def _get_filtered_business_reviews(filtered_restaurant_data, raw_reviews):
+def get_filtered_business_reviews(filtered_restaurant_data, raw_reviews):
     """Get IDs of reviews associated with filtered restaurants"""
     
-    print("\nLoading in raw reviews...")
-    file_sep = ',' if path_to_raw_reviews.endswith('.csv') else '\t'
-    df = pd.read_csv(path_to_raw_reviews, sep=file_sep)
-    print("\n\tRead in df with shape:", raw_reviews.shape)
-    print("\tDone!")
-    return df
+    print(f"\nGetting review IDs associated with {len(filtered_restaurant_data)} filtered restaurants...")
+    review_ids = raw_reviews.loc[raw_reviews['review_id'].isin(set(filtered_restaurant_data['business_id'].values))]['review_id'].values
+    print(f"\tDone! Found {len(review_ids)} reviews.")
+    print("Sample review IDs:", review_ids[:5])
 
     return review_ids
 
@@ -156,6 +154,7 @@ def main(path_to_enriched_df, path_to_raw_reviews, out_dir, text_fields, batch_s
     restaurants = prep_census_enriched_df(path_to_enriched_df)
     filtered_restaurants = filter_businesses_for_regression(restaurants)
     raw_reviews = load_raw_reviews(path_to_raw_reviews)
+    review_ids = get_filtered_business_reviews(filtered_restaurant_data, raw_reviews)
     #create_reviews_df(filtered_restaurants, raw_reviews)
     
 if __name__ == "__main__":
