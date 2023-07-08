@@ -8,8 +8,14 @@ import argparse
 from tqdm import tqdm, trange
 from collections import Counter, defaultdict
 
-REGIONS = {'us','europe','latin_america','asia'}
+
 CHAIN_THRESHOLD = 1
+CATEGORIES_TO_EXCLUDE = {'cafe','fast food'}
+REGIONS = {'us','europe','latin_america','asia'}
+TOP_CUISINES = set(['american (traditional)','american (new)','italian','mexican','chinese','japanese',
+                    'asian fusion','mediterranean','thai','cajun/creole','latin american','southern',
+                    'vietnamese','indian','greek','caribbean','middle eastern','french','soul food',
+                    'korean','tex-mex','cuban','spanish','irish'])
 
 def _is_restaurant(cat_set, search_set={'restaurants','food'}):
     return len(cat_set.intersection(search_set)) > 0
@@ -26,7 +32,7 @@ def _is_homogeneous(continents, verbose=False):
 
 def prep_census_enriched_df(path_to_enriched_df):
     restaurant_data = pd.read_csv(path_to_enriched_df,index_col=0)
-    print(f"Read in census enriched business data from {path_to_enriched_df} with {len(restaurant_data)} rows.")
+    print(f"\nRead in census enriched business data from {path_to_enriched_df} with {len(restaurant_data)} rows.")
 
     # Filter to restaurant data
     restaurant_data['categories'] = restaurant_data['categories'].apply(lambda x: x.split(',') if type(x) == str else [])
@@ -83,84 +89,48 @@ def prep_census_enriched_df(path_to_enriched_df):
     
     return restaurant_data
 
-def batch_df(df, batch_size):
-    df['batch_no'] = [int(x/batch_size) for x in df.index]
-    batch_size_counts = Counter(df['batch_no'].value_counts())
-    remainder = min(batch_size_counts.keys())
-    print(f"\nAssigned {len(df)} texts into {batch_size_counts[batch_size]} batches of size {batch_size} and {batch_size_counts[remainder]} batch of size {remainder}.")
-    return df
-
-def save_guid_batch_no_info(debug, out_dir, batched_df, batch_size, guid_str='review_id'):
-    guid2batch_no = dict(zip(batched_df[guid_str], batched_df['batch_no']))
-    batch_no2guids = {i: batched_df.iloc[range(i*batch_size,i*batch_size+batch_size)][guid_str].values for i in range(max(batched_df['batch_no'])+1)}
+def filter_businesses_for_regression(restaurant_data):
+    print(f"\nFiltering from {len(restaurant_data)} total restaurants for regression...")
     
-    if debug:
-        print(guid2batch_no)
-        print(batch_no2guids)
+    print("\tExcluding chains...")
+    dat = restaurant_data.loc[restaurant_data['is_chain']==False].copy()
+    print(f"\t\tNew #restaurants: {len(dat)}")
     
-    pickle.dump(guid2batch_no, open(os.path.join(out_dir, 'guid2batch_no.pkl'),'wb'))
-    pickle.dump(batch_no2guids, open(os.path.join(out_dir, 'batch_no2guids.pkl'),'wb'))
-    print(f"\nCreated lookups from GUIDs (field={guid_str}) to batch number and vice versa:", glob.glob(os.path.join(out_dir, '*.pkl')))
+    print(f"\tExcluding following categories: {CATEGORIES_TO_EXCLUDE}...")
+    dat = dat.loc[dat['categories'].apply(lambda x: len(x.intersection(CATEGORIES_TO_EXCLUDE))==0)].copy()
+    print(f"\t\tNew #restaurants: {len(dat)}")
     
-def strip_punc(raw_text):
-    return re.sub(r'[^\w\s]','',raw_text)
-
-def spacy_process(raw_text):
-    doc = nlp(raw_text)
-    return doc
-
-def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, text_fields='text', debug=False):
+    print("\tExcluding multi-region restaurants...")
+    dat = dat.loc[dat['is_homogeneous_or_fusion'].apply(lambda x: x == 'homo' or x == 'fusion')].copy()
+    print(f"\t\tNew #restaurants: {len(dat)}")
     
-    if debug:
-        print("\nDebug mode ON, will stop after first batch.")
-        
-    text_fields = text_fields.split(',')
-    if len(text_fields) > 1:
-        print("\nUsing concatenation of the strs associated with the following column names as text fields:", text_fields)
-    else:
-        print(f"\nUsing str associated with `{text_fields[0]}` as text field.")
+    print(f"\tSubsetting to top 20 cuisines: {TOP_CUISINES}...")
+    dat = dat.loc[dat['categories'].apply(lambda x: len(set(x).intersection(TOP_CUISINES)) > 0)].copy()
+    print(f"\t\tNew #restaurants: {len(dat)}")
     
-    #batch_groups = batched_df.groupby('batch_no')
-    for batch_no in trange(start_batch_no, end_batch_no, 1):
-        batch = df.iloc[(batch_no-start_batch_no)*batch_size:(batch_no-start_batch_no+1)*batch_size]
-        if len(batch) == 0:
-            print("\nRan out of input, terminating.")
-            break
-        print(f"\nProcessing batch {batch_no} of length {len(batch)}, with (start, end) indices = ({batch['og_index'].values[0]}, {batch['og_index'].values[-1]})...")
-        time.sleep(20)
+    print(f"\tExcluding restaurants without price point label; converting price points to integers...")
+    dat = dat.loc[(dat['price_level']!='false') & 
+                  (~pd.isna(dat['price_level']))].copy()
+    dat['price_level'] = dat['price_level'].apply(lambda x: int(x))
+    print(f"\t\tDone! New #restaurants: {len(dat)}")
+    
+    print("\nCuisine distribution in filtered restaurant data:")
+    for cuisine in TOP_CUISINES:
+        print(cuisine, len(dat.loc[dat['categories'].apply(lambda x: cuisine in x)]))
 
-        doc_bin = DocBin(attrs=["ORTH", "TAG", "HEAD", "DEP", "ENT_IOB", "ENT_TYPE", "ENT_KB_ID", "LEMMA", "MORPH", "POS"], store_user_data=True)
-        for row_ix, row in tqdm(batch.iterrows()):
-            text = ". ".join([row[tf] for tf in text_fields if type(row[tf])==str])
-            if (type(text) == str) and (len(strip_punc(text)) > 0):
-                doc = spacy_process(text)
-            else:
-                doc = Doc(nlp.vocab)
-            if debug:
-                print('\nRaw text:', text)
-                print('\n\tProcessed lemmas:', ' '.join([tok.lemma_ for tok in doc]))
-            doc_bin.add(doc)
+    return dat
 
-        out_fname = os.path.join(out_dir, f'{batch_no}.spacy')
-        print(f"\tDone processing! Saving to disk at: {out_fname}...")
-        doc_bin.to_disk(out_fname)
-        print("\t\tDone!")
+def create_reviews_df(filtered_restaurant_data):
+    # TODO: get reviews associated with filtered businesses
+    # hydrate with all fields
+    
+    return reviews_df
 
-        if debug:
-            print("\nTest deserialization...")
-            #nlp = spacy.blank("en")
-            doc_bin = DocBin().from_disk(out_fname)
-            docs = list(doc_bin.get_docs(nlp.vocab))
-            for tok in docs[0]:
-                print(tok.text, tok.lemma_, tok.head.text, tok.head.dep_, tok.pos_, tok.ent_type_)
-            print()
-            print("Coref results:", docs[0]._.coref_chains)
-            break
     
 def main(path_to_enriched_df, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
     restaurants = prep_census_enriched_df(path_to_enriched_df)
-    #reviews = batch_df(texts, batch_size)
-    #batch_spacy_process(out_dir, texts, start_batch_no, end_batch_no, batch_size, text_fields=text_fields, debug=debug)
+    filtered_restaurants = filter_businesses_for_regression(restaurants)
+    create_reviews_df(filtered_restaurants)
     
 if __name__ == "__main__":
     
