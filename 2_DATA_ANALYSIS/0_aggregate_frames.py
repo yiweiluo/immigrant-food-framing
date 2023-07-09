@@ -3,7 +3,7 @@
 
 import os, glob
 import json
-import pickle, dill
+import pickle#, dill
 import numpy as np
 import pandas as pd
 import argparse
@@ -84,7 +84,7 @@ def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_e
         print("\tCreating agg. features from scratch...")
         old_agg_feats_per_review = {}
     
-    agg_feats_per_review = dict()
+    agg_feats_per_review = dict() 
     
     reviews_to_add = set(lookup.keys()).difference(old_agg_feats_per_review.keys())
     print(f"\tFound {len(reviews_to_add)} reviews to add to cache. Sample IDs: {list(reviews_to_add)[:3]}. Adding...")
@@ -113,14 +113,14 @@ def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_e
         
         if debug and _ == 9:
             print("\tSaving test aggregated features dict...")
-            dill.dump(agg_feats_per_review, open(os.path.join(out_dir, "test_aggregated_frames_lookup.dill"), 'wb'))
+            pickle.dump(agg_feats_per_review, open(os.path.join(out_dir, "test_aggregated_frames_lookup.pkl"), 'wb'))
             print("\t\tDone!")
             sys.exit()
             
         if _ % save_every == 0:
             print("\tSaving aggregated features dict...")
             start_time = time.time()
-            dill.dump(agg_feats_per_review, open(os.path.join(out_dir, "aggregated_frames_lookup.dill"), 'wb'))
+            pickle.dump(agg_feats_per_review, open(os.path.join(out_dir, "aggregated_frames_lookup.pkl"), 'wb'))
             print(f"\t\tDone! Elapsed time: {(time.time()-start_time)/60} minutes.")
     
     print("\tSaving aggregated features dict...")
