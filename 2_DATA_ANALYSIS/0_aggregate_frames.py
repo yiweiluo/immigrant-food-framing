@@ -69,7 +69,7 @@ def _score_dict_feat(frames,feat='filtered_liwc_posemo',return_matches=True,norm
     else:
         return score
 
-def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_every=500000):
+def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_every=50000):
     
     print("\nAggregating features into framing dimensions using dictionaries...")
     if add_to_cache:
@@ -82,12 +82,11 @@ def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_e
             sys.exit()
     else:
         print("\tCreating agg. features from scratch...")
-        old_agg_feats_per_review = {}
-    
-    agg_feats_per_review = dict() 
+        old_agg_feats_per_review = {} 
     
     reviews_to_add = set(lookup.keys()).difference(old_agg_feats_per_review.keys())
     print(f"\tFound {len(reviews_to_add)} reviews to add to cache. Sample IDs: {list(reviews_to_add)[:3]}. Adding...")
+    agg_feats_per_review = dict()
     for _, review_id in tqdm(enumerate(reviews_to_add)):
         review_frames = lookup[review_id]
         for feat in avail_feats:
@@ -106,26 +105,33 @@ def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_e
 #                 no_neg_agg_matches += no_neg_matches
                 if no_neg_score == 0:
                     no_neg_matches = -1
-                agg_feats_per_review[f"{review_id}|{feat}_{anchor_type}"] = (no_neg_score, json.dumps(no_neg_matches))
+                agg_feats_per_review[f"{review_id}|{feat}_{anchor_type}"] = {'score':no_neg_score, 'matches':json.dumps(no_neg_matches)}
 #             if no_neg_agg_score == 0:
 #                 no_neg_agg_matches = -1
 #             agg_feats_per_review[review_id][feat]['agg'] = (no_neg_agg_score, json.dumps(no_neg_agg_matches))
         
         if debug and _ == 9:
             print("\tSaving test aggregated features dict...")
-            pickle.dump(agg_feats_per_review, open(os.path.join(out_dir, "test_aggregated_frames_lookup.pkl"), 'wb'))
+            pd.DataFrame(agg_feats_per_review).T.to_csv(os.path.join(out_dir, "test_aggregated_frames_lookup.csv"), index=True)
+            #pickle.dump(agg_feats_per_review, open(os.path.join(out_dir, "test_aggregated_frames_lookup.pkl"), 'wb'))
             print("\t\tDone!")
             sys.exit()
             
         if _ % save_every == 0:
-            print("\tSaving aggregated features dict...")
+            savename = os.path.join(out_dir, f"aggregated_frames_lookup_{_}.csv")
+            print(f"\tSaving aggregated features dict to {savename}...")
             start_time = time.time()
-            pickle.dump(agg_feats_per_review, open(os.path.join(out_dir, "aggregated_frames_lookup.pkl"), 'wb'))
+            #pickle.dump(agg_feats_per_review, open(savename, 'wb'))
+            pd.DataFrame(agg_feats_per_review).T.to_csv(savename, index=True)
             print(f"\t\tDone! Elapsed time: {(time.time()-start_time)/60} minutes.")
+            print(f"\tCreating new lookup batch...")
+            agg_feats_per_review = dict()
+            print("\t\tNew lookup length:", len(agg_feats_per_review))
     
     print("\tSaving aggregated features dict...")
     start_time = time.time()
-    dill.dump(agg_feats_per_review, open(os.path.join(out_dir, "aggregated_frames_lookup.dill"), 'wb'))
+    #dill.dump(agg_feats_per_review, open(os.path.join(out_dir, f"aggregated_frames_lookup_{_}.pkl"), 'wb'))
+    pd.DataFrame(agg_feats_per_review).T.to_csv(os.path.join(out_dir, f"aggregated_frames_lookup_{_}.csv"), index=True)
     print(f"\t\tDone! Elapsed time: {(time.time()-start_time)/60} minutes.")
     
 def main(path_to_lookup, out_dir, add_to_cache, debug):
