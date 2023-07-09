@@ -84,15 +84,15 @@ def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_e
         print("\tCreating agg. features from scratch...")
         old_agg_feats_per_review = {}
     
-    agg_feats_per_review = defaultdict(lambda: defaultdict(dict))
+    agg_feats_per_review = dict()
     
     reviews_to_add = set(lookup.keys()).difference(old_agg_feats_per_review.keys())
     print(f"\tFound {len(reviews_to_add)} reviews to add to cache. Sample IDs: {list(reviews_to_add)[:3]}. Adding...")
     for _, review_id in tqdm(enumerate(reviews_to_add)):
         review_frames = lookup[review_id]
         for feat in avail_feats:
-            no_neg_agg_score = 0
-            no_neg_agg_matches = Counter()
+#             no_neg_agg_score = 0
+#             no_neg_agg_matches = Counter()
             for anchor_type in anchor_dict:
                 anchor_frames = [x for x in review_frames
                                  if x[2].replace('_',' ') in anchor_dict[anchor_type]
@@ -102,14 +102,14 @@ def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_e
                 no_neg_res = _score_dict_feat(anchor_frames_no_neg, feat=feat)
                 no_neg_score = no_neg_res[0]
                 no_neg_matches = no_neg_res[1] 
-                no_neg_agg_score += no_neg_score
-                no_neg_agg_matches += no_neg_matches
+#                 no_neg_agg_score += no_neg_score
+#                 no_neg_agg_matches += no_neg_matches
                 if no_neg_score == 0:
                     no_neg_matches = -1
-                agg_feats_per_review[review_id][feat][anchor_type] = (no_neg_score, json.dumps(no_neg_matches))
-            if no_neg_agg_score == 0:
-                no_neg_agg_matches = -1
-            agg_feats_per_review[review_id][feat]['agg'] = (no_neg_agg_score, json.dumps(no_neg_agg_matches))
+                agg_feats_per_review[f"{review_id}|{feat}_{anchor_type}"] = (no_neg_score, json.dumps(no_neg_matches))
+#             if no_neg_agg_score == 0:
+#                 no_neg_agg_matches = -1
+#             agg_feats_per_review[review_id][feat]['agg'] = (no_neg_agg_score, json.dumps(no_neg_agg_matches))
         
         if debug and _ == 9:
             print("\tSaving test aggregated features dict...")
