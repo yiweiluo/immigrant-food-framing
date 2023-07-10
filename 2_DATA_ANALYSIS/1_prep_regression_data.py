@@ -12,10 +12,10 @@ import time
 CHAIN_THRESHOLD = 1
 CATEGORIES_TO_EXCLUDE = {'cafe','fast food'}
 REGIONS = {'us','europe','latin_america','asia'}
-TOP_CUISINES = set(['american (traditional)','american (new)','italian','mexican','chinese','japanese',
-                    'asian fusion','mediterranean','thai','cajun/creole','latin american','southern',
-                    'vietnamese','indian','greek','caribbean','middle eastern','french','soul food',
-                    'korean','tex-mex','cuban','spanish','irish'])
+TOP_CUISINES = set(['american (traditional)','american (new)','cajun/creole','southern','soul food',
+                    'mexican','latin american','cuban',
+                    'italian','mediterranean','greek','french','irish','spanish',
+                    'chinese','japanese','thai','vietnamese','indian','korean',])
 
 def _is_restaurant(cat_set, search_set={'restaurants','food'}):
     return len(cat_set.intersection(search_set)) > 0
@@ -146,24 +146,47 @@ def get_filtered_business_reviews(filtered_restaurant_data, raw_reviews):
     review_ids = raw_reviews.loc[raw_reviews['business_id'].isin(set(filtered_restaurant_data['business_id'].values))]['review_id'].values
     print(f"\tDone! Found {len(review_ids)} reviews.")
     print("Sample review IDs:", review_ids[:5])
+    
+    pickle.dump(review_ids, open('../data/yelp/restaurants_only/tmp/review_ids_for_df.pkl','wb'))
 
     return review_ids
 
-def create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, debug):
+def load_frame_lookups(path_to_framing_scores, debug):
+    print(f"\nLoading in framing scores to create reviews df...")
+    frame_lookup_paths = glob.glob(path_to_framing_scores+'/*.csv')
+    if debug:
+        print("\tDebug mode ON; loading only first 2 lookups")
+        frame_lookup_paths = frame_lookup_paths[:2]
+    print(f"\tFound {len(frame_lookup_paths)} lookups. Loading...")
+    start = time.time()
+    all_lookups = []
+    for fname in tqdm(frame_lookup_paths):
+        lookup = pd.read_csv(fname,index_col=0)
+        all_lookups.append(lookup)
+
+    master_lookup = pd.concat(all_lookups)
+    print(f"\n\tDone! Created master lookup with shape {len(master_lookup)}. Elapsed time: {(time.time()-start)/60} minutes.")
+    
+    return master_lookup
+
+def create_reviews_df(review_ids, raw_reviews, framing_scores_lookup, out_dir, debug):
     review_id2len = dict(zip(raw_reviews['review_id'], raw_reviews['len']))
     review_id2biz_id = dict(zip(raw_reviews['review_id'], raw_reviews['business_id']))
     
-    print(f"\nLoading in framing scores dict to create reviews df...")
-    start = time.time()
-    framing_scores_lookup = dill.load(open(path_to_framing_scores,'rb'))
-    print(f"\tDone! Read in dict of length {len(framing_scores_lookup)}. Elapsed time: {(time.time()-start)/60} minutes.")
+    feat_lists = glob.glob('feature_dicts/*.txt')
+    feat_dict = {}
+    for fname in feat_lists:
+        feat_name = fname.split('/')[-1].split('.txt')[0]
+        with open(fname,'r') as f:
+            feat_dict[feat_name] = f.read().splitlines()
+    avail_feats = [x.split('/')[-1].split('.txt')[0] for x in feat_lists]
     
-    if debug:
-        review_ids_for_df = framing_scores_lookup.keys()
-        print(f"Debug mode ON; limiting to {len(review_ids_for_df)} review IDs for which framing scores are available.")
-    else:
-        review_ids_for_df = review_ids
-        print(f"Debug mode OFF; using all {len(review_ids_for_df)} review IDs.")
+    review_ids_avail = set([x.split('|')[0] for x in framing_scores_lookup.index])
+#     print("Sample review IDs available:", list(review_ids_avail)[:5])
+    
+    review_ids_for_df = set(review_ids).intersection(review_ids_avail)
+    missing_ids = set(review_ids).difference(review_ids_avail)
+    print(f"Will create df using {len(review_ids_for_df)} review IDs after excluding {len(missing_ids)} reviews missing framing scores...")
     
     print("Now making reviews df...")
     per_review_df = defaultdict(list)                        
@@ -173,46 +196,60 @@ def create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, 
         per_review_df['biz_id'].append(review_id2biz_id[review_id])
         
         # Add framing scores
-        for feat in framing_scores_lookup[review_id]:
-            for anchor_type in framing_scores_lookup[review_id][feat]:
-                score, matches = framing_scores_lookup[review_id][feat][anchor_type]
-                if type(matches) == Counter:
-                    matches = json.dumps(matches) if matches != -1 else -1
+        for feat in avail_feats:
+            agg_score = 0
+            agg_matches = Counter()
+            for anchor_type in ['food','staff','venue']:
+                res = framing_scores_lookup.loc[f"{review_id}|{feat}_{anchor_type}"]
+                score, matches = int(res['score']), json.loads(res['matches'])
                 per_review_df[f"{feat}_{anchor_type}_score"].append(score)
                 per_review_df[f"{feat}_{anchor_type}_matches"].append(matches)
+                agg_score += score
+                if matches == -1:
+                    matches = Counter()
+                try:
+                    agg_matches += matches
+                except AttributeError:
+                    print("error matches:", matches, type(matches), review_id)
+            if agg_score == 0:
+                assert agg_matches == Counter()
+                agg_matches = -1
+            per_review_df[f"{feat}_agg_score"].append(agg_score)
+            per_review_df[f"{feat}_agg_matches"].append(json.dumps(agg_matches))
         
     per_review_df = pd.DataFrame(per_review_df)    
     print("\tCreated reviews df with shape:", per_review_df.shape)
     print(per_review_df.head())   
-    savename = os.path.join(out_dir, 'per_reviews_df.pkl')
+    savename = os.path.join(out_dir, 'per_reviews_df.csv')
     print("Saving reviews df to:", savename)
     per_review_df.to_pickle(savename)
     print("\tDone!")
     
-    return reviews_df
+    return per_review_df
 
 def hydrate_reviews_with_biz_data(restaurants_df, reviews_df, out_dir):
     print("\nHydrating reviews df with restaurant-related fields...")
     field2col_name = {'median_nb_income': 'Median household income in the past 12 months (2020 inflation-adjusted dollars)',
-                      'median_nb_diversity': '',
+                      'nb_diversity': 'Race_Simpson_Diversity_Index',
                       'mean_star_rating': 'stars',
                       'price_point': 'price_level',
                       'nb_pct_asian': 'pct_asian',
-                      'nb_pct_hisp': 'Percentage Hispanic',
+                      'nb_pct_hisp': 'Percentage hispanic',
                       'cuisine_region': 'continents',
                       'cuisines': 'categories'}
-    biz_id2fields = {}
+        
     for field in tqdm(field2col_name):
         if field == 'cuisines':
-            biz_id2fields[field] = dict(zip(restaurants_df['business_id'], 
-                                            restaurants_df[field].apply(lambda x: set(x).intersection(TOP_CUISINES))))
+            field_lookup = dict(zip(restaurants_df['business_id'], 
+                                            restaurants_df[field2col_name[field]].apply(lambda x: set(x).intersection(TOP_CUISINES))))
         elif field == 'cuisine_region':
-            biz_id2fields[field] = dict(zip(restaurants_df['business_id'], 
-                                            restaurants_df[field].apply(lambda x: x[0] if len(set(x)) == 1
+            field_lookup = dict(zip(restaurants_df['business_id'], 
+                                            restaurants_df[field2col_name[field]].apply(lambda x: x[0] if len(set(x)) == 1
                                                                                   else 'fusion')))
         else:
-            biz_id2fields[field] = dict(zip(restaurants_df['business_id'], restaurants_df[field2col_name[field]]))
-        reviews_df[f"biz_{field}"] = reviews_df['biz_id'].apply(lambda x: biz_id2fields[field][x])
+            field_lookup = dict(zip(restaurants_df['business_id'], restaurants_df[field2col_name[field]]))
+        
+        reviews_df[f"biz_{field}"] = reviews_df['biz_id'].apply(lambda x: field_lookup[x])
     print("\tDone! New reviews_df columns:", reviews_df.columns)
     print("\nCuisine region distribution:")
     print(reviews_df['biz_cuisine_region'].value_counts())
@@ -220,7 +257,7 @@ def hydrate_reviews_with_biz_data(restaurants_df, reviews_df, out_dir):
     for cuisine in TOP_CUISINES:
         print(cuisine, len(reviews_df.loc[reviews_df['biz_cuisines'].apply(lambda x: cuisine in x)]))
         
-    savename = os.path.join(out_dir, 'per_reviews_df.pkl')
+    savename = os.path.join(out_dir, 'per_reviews_df.csv')
     print(f"\nSaving hydrated df to: {savename}...")
     reviews_df.to_pickle(savename)
     print("\tDone!")
@@ -232,8 +269,9 @@ def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, out_d
     filtered_restaurants = filter_businesses_for_regression(restaurants)
     raw_reviews = load_raw_reviews(path_to_raw_reviews)
     review_ids = get_filtered_business_reviews(filtered_restaurants, raw_reviews)
-    reviews_df = create_reviews_df(review_ids, raw_reviews, path_to_framing_scores, out_dir, debug)
-#     hydrated_reviews_df = hydrate_reviews_with_biz_data(filtered_restaurants, reviews_df, out_dir)
+    master_frame_lookup = load_frame_lookups(path_to_framing_scores, debug)
+    reviews_df = create_reviews_df(review_ids, raw_reviews, master_frame_lookup, out_dir, debug)
+    hydrated_reviews_df = hydrate_reviews_with_biz_data(filtered_restaurants, reviews_df, out_dir)
     
 if __name__ == "__main__":
     
@@ -242,9 +280,9 @@ if __name__ == "__main__":
                         help='where to read in census enriched dataframe from')
     parser.add_argument('--path_to_raw_reviews', type=str, default='../data/yelp/restaurants_only/restaurant_reviews_df.csv',
                         help='where to read in raw reviews dataframe from')
-    parser.add_argument('--path_to_framing_scores', type=str, default='../data/yelp/restaurants_only/aggregated_frames_lookup.dill',
+    parser.add_argument('--path_to_framing_scores', type=str, default='../data/yelp/restaurants_only/agg_frame_lookups',
                         help='where to read in framing scores from')
-    parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only/spacy_processed',
+    parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only',
                         help='directory to save output to')
     parser.add_argument('--debug', action='store_true',
                         help='whether to run on subset of data for debugging purposes')
@@ -252,7 +290,7 @@ if __name__ == "__main__":
     if not args.debug:
         print("\n******WARNING****** DEBUG MODE OFF!")
     else:
-        print("\nRunning in debug mode; will limit dataframe creation to reviews for which framing scores are available.")
+        print("\nRunning in debug mode; will load only 2 framing score lookups and limit dataframe creation to reviews for which those framing scores are available.")
     
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
