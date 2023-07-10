@@ -4,6 +4,7 @@
 import os
 import pickle
 import pandas as pd
+import numpy as np
 import argparse
 from tqdm import tqdm, trange
 from collections import Counter
@@ -11,8 +12,6 @@ import scipy.stats as stats
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
-
-# do regressions and save results
 
 def load_reviews_df(path_to_reviews_df, debug):
     print("\nReading in reviews_df...")
@@ -47,12 +46,14 @@ def zscore_df(df, anchor='agg'):
                             'cheapness_words','cheapness_exp_words','cheapness_cheap_words']]
     for dep_var in dep_vars:
         df[f"{dep_var.replace('.','_')}"] = stats.zscore(df[dep_var])
+    print("\tDone!")
     
     return df
 
 def check_VIF(df):
-    inds = ['review_len','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversit'] + \
-            [x for x in reviews_df.columns if x.endswith('agg_score') 
+    print("\nChecking VIF scores for multicollinearity...")
+    inds = ['review_len','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity'] + \
+            [x for x in df.columns if x.endswith('agg_score') 
              and 'hygiene_words' not in x 
              and 'cheapness_words' not in x
              and 'auth_words' not in x
@@ -64,71 +65,154 @@ def check_VIF(df):
     vif_data["VIF"] = [variance_inflation_factor(X.values, i)
                               for i in range(len(X.columns))]
     print(vif_data)
+    print("\tDone!")
     
-def _do_regression(df, dep_var, out_dir):
-    doc = nlp(raw_text)
-    return doc
+def get_abs_coeffs(res, ref='us'):
+    intercept_row = res.params.filter(like='Intercept', axis=0)
+    intercept_row.index = [ref]
+    cuisine_coeffs = res.params.filter(like='_region', axis=0)
+    cuisine_coeffs.index = [x.split('T.')[-1].replace(']','') for x in cuisine_coeffs.index]
+    cuisine_coeffs = cuisine_coeffs + intercept_row[ref]
+    #display(cuisine_coeffs)
+    cuisine_coeffs = cuisine_coeffs.append(intercept_row)
+    #display(cuisine_coeffs)
+    return cuisine_coeffs
 
-def do_all_regressions(out_dir, df, start_batch_no, end_batch_no, batch_size, text_fields='text', debug=False):
+def get_abs_per_cuisine_coeffs(res):
+    intercept = res.params[0]
+    cuisine_coeffs = res.params.filter(like='biz_cuisine',axis=0)
+    cuisine_coeffs.index = [x.replace('biz_cuisine_','') for x in cuisine_coeffs.index]
+    cuisine_coeffs = cuisine_coeffs + intercept
+    return cuisine_coeffs
+
+def get_standard_error_sum(results, covariates):
+    '''
+    #95CI is approximated with +- 2 sum_variance_standard_error
+    '''
+    # get the variance covariance matrix
+    # print(covariates)
+    vcov = results.cov_params() \
+        .loc[covariates, covariates].values
+
+    # calculate the sum of all pair wise covariances by summing up off-diagonal entries
+    off_dia_sum = np.sum(vcov)
+    # variance of a sum of variables is the square root
+    return np.sqrt(off_dia_sum)
+
+def get_abs_errs(res, ref='us'):
+    abs_errs_per_coeff = {}
+    for region_coeff in res.params.filter(like='_region',axis=0).index:
+        covariates = ['Intercept'] + [region_coeff]
+        err = get_standard_error_sum(res, covariates)
+        abs_errs_per_coeff[region_coeff.split('T.')[-1].replace(']','')] = err
+    abs_errs_per_coeff[ref] = res.bse['Intercept']
+    return abs_errs_per_coeff
+
+def get_abs_per_cuisine_errs(res):
+    abs_errs_per_coeff = {}
+    for cuisine_coeff in res.bse.filter(like='biz_cuisine',axis=0).index:
+        covariates = ['const'] + [cuisine_coeff]
+        err = get_standard_error_sum(res, covariates)
+        abs_errs_per_coeff[cuisine_coeff.split('_')[-1]] = err
+    return abs_errs_per_coeff
+
+def get_pvalues(res, ref='us'):
+    out = {ref: res.pvalues['Intercept']}
+    for region_coeff in res.params.filter(like='_region',axis=0).index:
+        out[region_coeff.split('T.')[-1].replace(']','')] = res.pvalues[region_coeff]
+    return out
+
+def get_per_cuisine_pvals(res):
+    cuisine_coeffs = res.pvalues.filter(like='biz_cuisine',axis=0)
+    cuisine_coeffs.index = [x.replace('biz_cuisine_','') for x in cuisine_coeffs.index]
+    return cuisine_coeffs
+
+def save_res(res, savename):
+    df = pd.DataFrame(res.summary().tables[1])
+    df.columns=df.iloc[0]
+    df = df[1:]
+    df.to_csv(savename, index=False)
     
-    if debug:
-        print("\nDebug mode ON, will stop after first batch.")
-        
-    text_fields = text_fields.split(',')
-    if len(text_fields) > 1:
-        print("\nUsing concatenation of the strs associated with the following column names as text fields:", text_fields)
+def _do_regression(df, dep_var, cuisine_ind_var, covariates, out_dir):
+    
+    if cuisine_ind_var != 'cuisine':
+        formula = f"{dep_var} ~ C({cuisine_ind_var}, Treatment(reference='us'))"
+        if 'review_len' in covariates:
+            formula += ' + review_len'
+        if 'biz_price_point' in covariates:
+            formula += ' + C(biz_price_point, Treatment(reference=2))'
+        if 'biz_mean_star_rating' in covariates:
+            formula += ' + biz_mean_star_rating'
+        if 'biz_median_nb_income' in covariates:
+            formula += ' + biz_median_nb_income'
+        if 'biz_nb_diversity' in covariates:
+            formula += ' + biz_nb_diversity'
+        print(f"\nPerforming regression with the following formula: {formula}")
+
+        mod = smf.ols(formula=formula, data=df)
     else:
-        print(f"\nUsing str associated with `{text_fields[0]}` as text field.")
+        Y = df[dep_var]
+        X = df[[x for x in covariates if x != 'biz_price_point']]
+        X = sm.add_constant(X)
+        biz_price_point = pd.get_dummies(df['biz_price_point'], prefix='biz_price_point', drop_first=False)
+        biz_price_point.drop('biz_price_point_2', axis = 1, inplace=True)
+        biz_cuisine = pd.get_dummies(df['biz_cuisines'].explode()).groupby(level=0).sum()
+        biz_cuisine.columns = [f'biz_cuisine_{x}' for x in biz_cuisine]
+        fullX = pd.concat([X, biz_price_level, biz_cuisine], axis=1)
+
+        mod = sm.OLS(Y, fullX)
     
-    #batch_groups = batched_df.groupby('batch_no')
-    for batch_no in trange(start_batch_no, end_batch_no, 1):
-        batch = df.iloc[(batch_no-start_batch_no)*batch_size:(batch_no-start_batch_no+1)*batch_size]
-        if len(batch) == 0:
-            print("\nRan out of input, terminating.")
-            break
-        print(f"\nProcessing batch {batch_no} of length {len(batch)}, with (start, end) indices = ({batch['og_index'].values[0]}, {batch['og_index'].values[-1]})...")
-        time.sleep(20)
+    modf = mod.fit()
+    print()
+    print(modf.summary())
+    
+    abs_coeffs = get_abs_coeffs(modf, ref='us')
+    abs_errs = get_abs_errs(modf, ref='us')
+    pvalues = get_pvalues(modf, ref='us')
+    print("\tabsolute coeffs:",abs_coeffs)
+    print("\tabsolute errs:",abs_errs)
+    print("\tpvalues:",pvalues)
+    
+    savefile = os.path.join(out_dir, f"{dep_var}_{cuisine_ind_var}.csv")
+    save_res(modf, savefile)
+    savefile = os.path.join(out_dir, f"{dep_var}_{cuisine_ind_var}_covars.csv")
+    modf.cov_params().to_csv(savefile)
 
-        doc_bin = DocBin(attrs=["ORTH", "TAG", "HEAD", "DEP", "ENT_IOB", "ENT_TYPE", "ENT_KB_ID", "LEMMA", "MORPH", "POS"], store_user_data=True)
-        for row_ix, row in tqdm(batch.iterrows()):
-            text = ". ".join([row[tf] for tf in text_fields if type(row[tf])==str])
-            if (type(text) == str) and (len(strip_punc(text)) > 0):
-                doc = spacy_process(text)
-            else:
-                doc = Doc(nlp.vocab)
-            if debug:
-                print('\nRaw text:', text)
-                print('\n\tProcessed lemmas:', ' '.join([tok.lemma_ for tok in doc]))
-            doc_bin.add(doc)
-
-        out_fname = os.path.join(out_dir, f'{batch_no}.spacy')
-        print(f"\tDone processing! Saving to disk at: {out_fname}...")
-        doc_bin.to_disk(out_fname)
-        print("\t\tDone!")
-
-        if debug:
-            print("\nTest deserialization...")
-            #nlp = spacy.blank("en")
-            doc_bin = DocBin().from_disk(out_fname)
-            docs = list(doc_bin.get_docs(nlp.vocab))
-            for tok in docs[0]:
-                print(tok.text, tok.lemma_, tok.head.text, tok.head.dep_, tok.pos_, tok.ent_type_)
-            print()
-            print("Coref results:", docs[0]._.coref_chains)
-            break
+def do_all_regressions(out_dir, df):
+    
+    print("\nDoing Study 1 regressions on full reviews set...")
+    covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
+    for dep_var in ['exotic_words_agg_score']:
+        for cuisine_ind_var in ['biz_macro_region','biz_cuisine_region','biz_cuisine']:
+            _do_regression(df, dep_var, cuisine_ind_var, covariates, out_dir)
+            
+    # add per-cuisine
+    # add race-othering
+    
+    # Study 2
+    # Study 2 glass ceiling
+    
+    # top-cuisine removed
+    # Study 1 cajun-creole removed
+    # user-controlled
+    
     
 def main(path_to_reviews_df, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
     reviews = load_reviews_df(path_to_reviews_df, debug)
     reviews = zscore_df(reviews)
-    check_VIF(reviews)
-    do_all_regressions(reviews, out_dir)
+    if not debug:
+        check_VIF(reviews)
+    else:
+        print("Debug mode ON; skipping VIF step")
+    do_all_regressions(out_dir, reviews)
+    
         
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--path_to_reviews_df', type=str, default='../data/yelp/restaurants_only/per_reviews_df.csv',
                         help='where to read in reviews dataframe from')
-    parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only',
+    parser.add_argument('--out_dir', type=str, default='results/',
                         help='directory to save output to')
     parser.add_argument('--text_fields', type=str, default='text',
                         help='column name(s) for text fields')
@@ -144,7 +228,7 @@ if __name__ == "__main__":
     if not args.debug:
         print("\n******WARNING****** DEBUG MODE OFF!")
     else:
-        print("\nRunning in debug mode; will limit to processing first batch of texts with batch size of 10.")
+        print("\nRunning in debug mode; will skip VIF scores check.")
         args.start_batch_no, args.end_batch_no, args.batch_size = 0, 1, 10
     
     if not os.path.exists(args.out_dir):
