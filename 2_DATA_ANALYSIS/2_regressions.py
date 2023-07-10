@@ -15,15 +15,24 @@ from collections import Counter, defaultdict
 # z-score 
 # do regressions and save results
 
-def load_df(path_to_df, debug, start_batch_no, end_batch_no, batch_size):
-    file_sep = ',' if path_to_df.endswith('.csv') else '\t'
-    print(f"\nReading in lines {start_batch_no*batch_size} to {start_batch_no*batch_size+(end_batch_no-start_batch_no)*batch_size} of df...")
-    df = pd.read_csv(path_to_df, sep=file_sep, skiprows=range(1,start_batch_no*batch_size+1), nrows=(end_batch_no-start_batch_no)*batch_size)#, index_col=0)
-    if 'og_index' not in df.columns:
-        print("\tNo OG index found; adding original index to keep track of batches...")
-        df['og_index'] = list(range(len(df)))
-        
-    print(f"\tDone! Start, end indices: ({df['og_index'].values[0]}, {df['og_index'].values[-1]})")
+def load_reviews_df(path_to_reviews_df, debug):
+    print("\nReading in reviews_df...")
+    if False:#debug:
+        print(f"\nDebug mode ON; limiting to first 5000 lines...")
+    else:
+        print(f"\nDebug mode OFF; reading in entire dataframe...")
+        reviews_df = pd.read_pickle(path_to_reviews_df)
+    reviews_df['biz_macro_region'] = reviews_df['biz_cuisine_region'].apply(lambda x: 'us' if x == 'us' else 'non-us')
+
+    print(f"\tDone! Read in df with shape {reviews_df.shape}.")
+    print(reviews_df.head())
+    print()
+    print(reviews_df['biz_macro_region'].value_counts())
+    print()
+    print(reviews_df['biz_cuisine_region'].value_counts())
+    print()
+    print(reviews_df[['biz_median_nb_income','biz_nb_diversity']].describe())
+    
     return df
 
 def batch_df(df, batch_size):
@@ -100,17 +109,16 @@ def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, t
             print("Coref results:", docs[0]._.coref_chains)
             break
     
-def main(path_to_dataset, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
-    texts = load_df(path_to_dataset, debug, start_batch_no, end_batch_no, batch_size)
-    reviews = batch_df(texts, batch_size)
-    batch_spacy_process(out_dir, texts, start_batch_no, end_batch_no, batch_size, text_fields=text_fields, debug=debug)
+def main(path_to_reviews_df, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
+    reviews = load_reviews_df(path_to_reviews_df, debug)
+#     batch_spacy_process(out_dir, texts, start_batch_no, end_batch_no, batch_size, text_fields=text_fields, debug=debug)
     
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path_to_texts', type=str, default='../data/yelp/restaurants_only/restaurant_reviews_df.csv',
-                        help='where to read in texts dataframe from')
-    parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only/spacy_processed',
+    parser.add_argument('--path_to_reviews_df', type=str, default='../data/yelp/restaurants_only/per_reviews_df.csv',
+                        help='where to read in reviews dataframe from')
+    parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only',
                         help='directory to save output to')
     parser.add_argument('--text_fields', type=str, default='text',
                         help='column name(s) for text fields')
@@ -132,5 +140,5 @@ if __name__ == "__main__":
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
         
-    main(args.path_to_texts, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug)
+    main(args.path_to_reviews_df, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug)
     
