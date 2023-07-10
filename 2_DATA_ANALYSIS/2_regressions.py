@@ -6,15 +6,14 @@ import pickle
 import pandas as pd
 import argparse
 import spacy
-from spacy.tokens import DocBin, Doc
 from tqdm import tqdm, trange
 from collections import Counter, defaultdict
-import re
-import time
 
-spacy.prefer_gpu()
-nlp = spacy.load("en_core_web_lg")
-nlp.add_pipe('coreferee')
+# load reviews_df
+# annotate w/ macro-regions; make sure all datatypes are ints etc.
+# check VIF scores
+# z-score 
+# do regressions and save results
 
 def load_df(path_to_df, debug, start_batch_no, end_batch_no, batch_size):
     file_sep = ',' if path_to_df.endswith('.csv') else '\t'
