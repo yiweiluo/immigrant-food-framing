@@ -12,10 +12,6 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
-# load reviews_df
-# annotate w/ macro-regions; make sure all datatypes are ints etc.
-# check VIF scores
-# z-score 
 # do regressions and save results
 
 def load_reviews_df(path_to_reviews_df, debug):
@@ -54,26 +50,26 @@ def zscore_df(df, anchor='agg'):
     
     return df
 
-def save_guid_batch_no_info(debug, out_dir, batched_df, batch_size, guid_str='review_id'):
-    guid2batch_no = dict(zip(batched_df[guid_str], batched_df['batch_no']))
-    batch_no2guids = {i: batched_df.iloc[range(i*batch_size,i*batch_size+batch_size)][guid_str].values for i in range(max(batched_df['batch_no'])+1)}
-    
-    if debug:
-        print(guid2batch_no)
-        print(batch_no2guids)
-    
-    pickle.dump(guid2batch_no, open(os.path.join(out_dir, 'guid2batch_no.pkl'),'wb'))
-    pickle.dump(batch_no2guids, open(os.path.join(out_dir, 'batch_no2guids.pkl'),'wb'))
-    print(f"\nCreated lookups from GUIDs (field={guid_str}) to batch number and vice versa:", glob.glob(os.path.join(out_dir, '*.pkl')))
-    
-def strip_punc(raw_text):
-    return re.sub(r'[^\w\s]','',raw_text)
+def check_VIF(df):
+    inds = ['review_len','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversit'] + \
+            [x for x in reviews_df.columns if x.endswith('agg_score') 
+             and 'hygiene_words' not in x 
+             and 'cheapness_words' not in x
+             and 'auth_words' not in x
+             and '.' not in x]
+    X = df[inds]
 
-def spacy_process(raw_text):
+    vif_data = pd.DataFrame()
+    vif_data["feature"] = X.columns
+    vif_data["VIF"] = [variance_inflation_factor(X.values, i)
+                              for i in range(len(X.columns))]
+    print(vif_data)
+    
+def _do_regression(df, dep_var, out_dir):
     doc = nlp(raw_text)
     return doc
 
-def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, text_fields='text', debug=False):
+def do_all_regressions(out_dir, df, start_batch_no, end_batch_no, batch_size, text_fields='text', debug=False):
     
     if debug:
         print("\nDebug mode ON, will stop after first batch.")
@@ -124,6 +120,8 @@ def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, t
 def main(path_to_reviews_df, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
     reviews = load_reviews_df(path_to_reviews_df, debug)
     reviews = zscore_df(reviews)
+    check_VIF(reviews)
+    do_all_regressions(reviews, out_dir)
         
 if __name__ == "__main__":
     
