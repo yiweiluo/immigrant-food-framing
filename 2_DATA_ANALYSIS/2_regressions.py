@@ -33,13 +33,22 @@ def load_reviews_df(path_to_reviews_df, debug):
     print()
     print(reviews_df[['biz_median_nb_income','biz_nb_diversity']].describe())
     
-    return df
+    return reviews_df
 
-def batch_df(df, batch_size):
-    df['batch_no'] = [int(x/batch_size) for x in df.index]
-    batch_size_counts = Counter(df['batch_no'].value_counts())
-    remainder = min(batch_size_counts.keys())
-    print(f"\nAssigned {len(df)} texts into {batch_size_counts[batch_size]} batches of size {batch_size} and {batch_size_counts[remainder]} batch of size {remainder}.")
+def zscore_df(df, anchor='agg'):
+    print(f"\nz-scoring non-dummy variables...")
+    
+    for feat in ["review_len","biz_mean_star_rating","biz_median_nb_income","biz_nb_diversity"]:
+        df[f"{feat}"] = stats.zscore(df[feat])
+
+    dep_vars = [f"{var}_{anchor}_score" 
+                for var in ['exotic_words','auth_words','auth_simple_words','auth_other_words','typic_words',
+                            'filtered_liwc_posemo','luxury_words',
+                            'hygiene_words','hygiene.pos_words','hygiene.neg_words',
+                            'cheapness_words','cheapness_exp_words','cheapness_cheap_words']]
+    for dep_var in dep_vars:
+        df[f"{dep_var.replace('.','_')}"] = stats.zscore(df[dep_var])
+    
     return df
 
 def save_guid_batch_no_info(debug, out_dir, batched_df, batch_size, guid_str='review_id'):
@@ -111,8 +120,8 @@ def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, t
     
 def main(path_to_reviews_df, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
     reviews = load_reviews_df(path_to_reviews_df, debug)
-#     batch_spacy_process(out_dir, texts, start_batch_no, end_batch_no, batch_size, text_fields=text_fields, debug=debug)
-    
+    reviews = zscore_df(reviews)
+        
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
