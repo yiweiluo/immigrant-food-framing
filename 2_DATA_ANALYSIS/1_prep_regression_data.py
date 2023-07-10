@@ -251,6 +251,11 @@ def hydrate_reviews_with_biz_data(restaurants_df, reviews_df, out_dir):
         
         reviews_df[f"biz_{field}"] = reviews_df['biz_id'].apply(lambda x: field_lookup[x])
     print("\tDone! New reviews_df columns:", reviews_df.columns)
+    
+    print("\nDropping nan neighborhood attributes...")
+    reviews_df.dropna(subset=['biz_median_nb_income','biz_nb_diversity'], inplace=True)
+    print(f"\tNew reviews_df length: {len(reviews_df)}")
+    
     print("\nCuisine region distribution:")
     print(reviews_df['biz_cuisine_region'].value_counts())
     print("\nIndividual cuisine distribution:")
