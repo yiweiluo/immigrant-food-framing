@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import os, glob
+import os
 import pickle
 import pandas as pd
 import argparse
-import spacy
 from tqdm import tqdm, trange
-from collections import Counter, defaultdict
+from collections import Counter
+import scipy.stats as stats
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
 
 # load reviews_df
 # annotate w/ macro-regions; make sure all datatypes are ints etc.
