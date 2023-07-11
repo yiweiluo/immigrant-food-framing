@@ -41,7 +41,7 @@ def batch_df(df, batch_size):
 def load_parsed_docs(path_to_parsed):
     print("\nLoading parsed review docs...")
     all_batches = glob.glob(path_to_parsed+'/*.spacy')
-    doc_bin = DocBin().from_disk(all_batches[0])
+    doc_bin = DocBin().from_disk(sorted(all_batches)[0])
     docs = list(doc_bin.get_docs(nlp_spacy.vocab))
     print(f"\tDone! Loaded {len(all_batches)} batches of docs of batch size {len(docs)}.")
     return all_batches, len(docs)

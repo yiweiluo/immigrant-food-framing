@@ -13,13 +13,12 @@ import sys
 CHAIN_THRESHOLD = 1
 CATEGORIES_TO_EXCLUDE = {'cafe','fast food'}
 REGIONS = {'us','europe','latin_america','asia'}
-TOP_CUISINES = set(['american (traditional)','american (new)','cajun/creole','southern','soul food',
+TOP_CUISINES = set(['american (traditional)','traditional american','american (new)','new american','cajun/creole','cajun','creole','southern','soul food',
                     'mexican','latin american','cuban',
                     'italian','mediterranean','greek','french','irish','spanish',
                     'chinese','japanese','thai','vietnamese','indian','korean',])
-
+TO_EXCLUDE = set(['ethnic food','asian fusion','tex-mex','caribbean','middle eastern'])
 ethnic_cats_per_continent = pd.read_csv('../ethnic_cats_per_continent.csv')
-ethnic_cats_per_continent = ethnic_cats_per_continent.loc[ethnic_cats_per_continent['region'].isin(REGIONS)]
 ethnic_cat2continent = dict(zip(ethnic_cats_per_continent['cuisine'],ethnic_cats_per_continent['region']))
 
 def _is_restaurant(cat_set, search_set={'restaurants','food'}):
@@ -234,7 +233,7 @@ def create_reviews_df(review_ids, raw_reviews, guid, framing_scores_lookup, out_
     return per_review_df
 
 def hydrate_llm_reviews(og_reviews, reviews_df, out_dir):
-#     og_reviews = pd.read_csv(path_to_og_reviews)
+
     print("\nHydrating reviews df with meta-info fields...")
     field2col_name = {'sentiment': 'sentiment',
                       'price_point': 'star',
@@ -244,15 +243,16 @@ def hydrate_llm_reviews(og_reviews, reviews_df, out_dir):
     for field in tqdm(field2col_name):
         if field == 'cuisines':
             field_lookup = dict(zip(og_reviews['lookup_guid'], 
-                                            og_reviews[field2col_name[field]].apply(lambda x: {x}.intersection(TOP_CUISINES))))
+                                            og_reviews[field2col_name[field]].apply(lambda x: {x.lower()})))
         elif field == 'cuisine_region':
             field_lookup = dict(zip(og_reviews['lookup_guid'], 
-                                            og_reviews[field2col_name[field]].apply(lambda x: ethnic_cat2cont[x])))
+                                            og_reviews[field2col_name[field]].apply(lambda x: ethnic_cat2continent[x.lower()])))
         else:
             field_lookup = dict(zip(og_reviews['lookup_guid'], og_reviews[field2col_name[field]]))
         
         reviews_df[f"biz_{field}"] = reviews_df['review_id'].apply(lambda x: field_lookup[x])
     print("\tDone! New reviews_df columns:", reviews_df.columns)
+    reviews_df = reviews_df.loc[reviews_df['biz_cuisines'].apply(lambda x: len(x.intersection(TO_EXCLUDE))) == 0]
     
     print("\nCuisine region distribution:")
     print(reviews_df['biz_cuisine_region'].value_counts())

@@ -33,18 +33,8 @@ def load_restaurants_df(path_to_restaurants_df):
 def load_reviews_df(path_to_reviews_df, debug, do_yelp=True):
     print("\nReading in reviews_df...")
     reviews_df = pd.read_pickle(path_to_reviews_df)
-    if do_yelp:
-        print(f"\nReading Yelp reviews dataframe...")
-        reviews_df['biz_macro_region'] = reviews_df['biz_cuisine_region'].apply(lambda x: 'us' if x == 'us' else 'non-us')
-        reviews_df['biz_cuisines'] = reviews_df['biz_cuisines'].apply(lambda x: list(x))
-    else:
-        print(f"\nReading LLM reviews dataframe...")
-        ethnic_cats_per_continent = pd.read_csv('../ethnic_cats_per_continent.csv')
-        ethnic_cats_per_continent = ethnic_cats_per_continent.loc[ethnic_cats_per_continent['region'].isin(REGIONS)]
-        ethnic_cat2continent = dict(zip(ethnic_cats_per_continent['cuisine'],ethnic_cats_per_continent['region']))
-        reviews_df = reviews_df.loc[reviews_df['cuisine'].apply(lambda x: x.lower() not in TO_EXCLUDE)]
-        reviews_df['biz_cuisine_region'] = reviews_df['cuisine'].apply(lambda x: ethnic_cat2continent[x.lower()])
-        reviews_df['biz_macro_region'] = reviews_df['biz_cuisine_region'].apply(lambda x: 'us' if x == 'us' else 'non-us')
+    reviews_df['biz_macro_region'] = reviews_df['biz_cuisine_region'].apply(lambda x: 'us' if x == 'us' else 'non-us')
+    reviews_df['biz_cuisines'] = reviews_df['biz_cuisines'].apply(lambda x: list(x))
 
     print(f"\tDone! Read in df with shape {reviews_df.shape}.")
     print(reviews_df.head())
@@ -62,14 +52,34 @@ def load_reviews_df(path_to_reviews_df, debug, do_yelp=True):
         reviews_df['user_id'] = reviews_df['review_id'].apply(lambda x: review_id2user_id[x])
         print("\tDone!")
     else:
-        reviews_df['biz_price_point'] = reviews_df['star'].apply(lambda x: {'$ ($10 and under)':1, 
-                                                                           '$$ ($10-$25)':2,
-                                                                           '$$$ ($25-$45)':3,
-                                                                           '$$$$ ($50 and up)':4}[x])
-        print("\nSubsampling LLM reviews to be stratified evenly across covariates besides length and sentiment...")
+        print(reviews_df['biz_sentiment'].value_counts())
+        print("\nSubsampling LLM reviews to match actual restaurant rating distribution...")
+        target_pcts_per_sentiment = {
+            'Very positive':.454797,
+            'Positive':.248251,
+            'Neutral':.115715,
+            'Negative':.098499,
+            'Very negative':.082738
+        }
+        top_sentiment, top_pct = 'Very positive', target_pcts_per_sentiment['Very positive']
+        total_N = int(reviews_df['biz_sentiment'].value_counts(normalize=False)[top_sentiment] / top_pct)
+
+        reviews_df = pd.concat([reviews_df[reviews_df['biz_sentiment'] == k].sample(int(v * total_N), replace=False) 
+                                   for k, v in target_pcts_per_sentiment.items()])
+        print(reviews_df['biz_sentiment'].value_counts(normalize=True))
         
+        print("\nSubsampling LLM reviews to be stratified evenly across covariates besides length and sentiment...")
+        print(reviews_df['biz_cuisine_region'].value_counts())
+        reviews_df = pd.concat([reviews_df.loc[reviews_df['biz_cuisine_region']==region].sample(n=261,replace=False)
+           for region in ['asia','europe','us','latin_america']])
+        print(reviews_df['biz_cuisine_region'].value_counts())
+        print(reviews_df['biz_sentiment'].value_counts(normalize=True))
         print("\tDone!")
     
+        reviews_df['biz_price_point'] = reviews_df['biz_price_point'].apply(lambda x: {'$ ($10 and under)':1, 
+                                                                               '$$ ($10-$25)':2,
+                                                                               '$$$ ($25-$45)':3,
+                                                                               '$$$$ ($50 and up)':4}[x])
     print(reviews_df['biz_price_point'].value_counts())
     
     return reviews_df
