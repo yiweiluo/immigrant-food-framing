@@ -242,13 +242,13 @@ def hydrate_llm_reviews(og_reviews, reviews_df, out_dir):
     
     for field in tqdm(field2col_name):
         if field == 'cuisines':
-            field_lookup = dict(zip(og_reviews['lookup_guid'], 
+            field_lookup = dict(zip(og_reviews['guid'], 
                                             og_reviews[field2col_name[field]].apply(lambda x: {x.lower()})))
         elif field == 'cuisine_region':
-            field_lookup = dict(zip(og_reviews['lookup_guid'], 
+            field_lookup = dict(zip(og_reviews['guid'], 
                                             og_reviews[field2col_name[field]].apply(lambda x: ethnic_cat2continent[x.lower()])))
         else:
-            field_lookup = dict(zip(og_reviews['lookup_guid'], og_reviews[field2col_name[field]]))
+            field_lookup = dict(zip(og_reviews['guid'], og_reviews[field2col_name[field]]))
         
         reviews_df[f"biz_{field}"] = reviews_df['review_id'].apply(lambda x: field_lookup[x])
     print("\tDone! New reviews_df columns:", reviews_df.columns)

@@ -9,7 +9,7 @@ python 0_aggregate_frames.py --path_to_lookup ../data/llm/frames_lookup.pkl --ou
 
 `1_prep_regression_data.py` creates a dataframe with one row per review containing all review variables (framing scores, length, restaurant and neighborhood attributes, etc.) for the regression analyses. For Yelp reviews, all default command line arguments can be used. For GPT reviews, run the following:
 ```
-python 1_prep_regression_data.py --path_to_raw_reviews ../data/llm/gpt3_reviews_concat.csv --path_to_framing_scores ../data/llm/agg_frame_lookups --guid lookup_guid --text_field review_no_disclaimers --out_dir ../data/llm 
+python 1_prep_regression_data.py --path_to_raw_reviews ../data/llm/gpt3_reviews_concat.csv --path_to_framing_scores ../data/llm/agg_frame_lookups --guid guid --text_field review_no_disclaimers --out_dir ../data/llm 
 ```
 
 `2_regressions.py` performs regressions on Yelp reviews and saves the results to `/results/`. 

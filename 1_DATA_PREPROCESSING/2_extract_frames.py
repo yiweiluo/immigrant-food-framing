@@ -175,7 +175,10 @@ def extract_all_frames(
                 
                 if (row_ix % print_every == 0):
                     print(f"\nOn doc {doc_ix} of batch {batch_no}")
-                    print("Review text:", row[text_field][:50])
+                    try:
+                        print("Review text:", row[text_field][:50])
+                    except TypeError:
+                        print("Text Error")
                 
                 full_tokens = extract_frames_from_doc(doc, pos_tag_set=pos_tags)
                 
