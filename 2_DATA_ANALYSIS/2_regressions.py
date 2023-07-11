@@ -74,9 +74,7 @@ def get_abs_coeffs(res, ref='us'):
     cuisine_coeffs = res.params.filter(like='_region', axis=0)
     cuisine_coeffs.index = [x.split('T.')[-1].replace(']','') for x in cuisine_coeffs.index]
     cuisine_coeffs = cuisine_coeffs + intercept_row[ref]
-    #display(cuisine_coeffs)
     cuisine_coeffs = cuisine_coeffs.append(intercept_row)
-    #display(cuisine_coeffs)
     return cuisine_coeffs
 
 def get_abs_per_cuisine_coeffs(res):
@@ -188,7 +186,7 @@ def do_all_regressions(out_dir, df):
     
     print("\nDoing Study 1 regressions on full reviews set...")
     covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
-    for dep_var in ['exotic_words_agg_score']:#,'auth_words_agg_score','typic_words_agg_score']:
+    for dep_var in ['exotic_words_agg_score','auth_words_agg_score','typic_words_agg_score']:
         for cuisine_ind_var in ['biz_macro_region','biz_cuisine_region','biz_cuisine']:
             _do_regression(df, dep_var, cuisine_ind_var, 'us', covariates, out_dir)
             
@@ -226,14 +224,6 @@ if __name__ == "__main__":
                         help='where to read in reviews dataframe from')
     parser.add_argument('--out_dir', type=str, default='results/',
                         help='directory to save output to')
-    parser.add_argument('--text_fields', type=str, default='text',
-                        help='column name(s) for text fields')
-    parser.add_argument('--batch_size', type=int, default=5000,
-                        help='batch size for spaCy')
-    parser.add_argument('--start_batch_no', type=int, default=0, 
-                        help='batch number to start at')
-    parser.add_argument('--end_batch_no', type=int, default=2000,
-                        help='batch number to end before (non-inclusive)')
     parser.add_argument('--debug', action='store_true',
                         help='whether to run on subset of data for debugging purposes')
     args = parser.parse_args()
@@ -241,10 +231,9 @@ if __name__ == "__main__":
         print("\n******WARNING****** DEBUG MODE OFF!")
     else:
         print("\nRunning in debug mode; will skip VIF scores check.")
-        args.start_batch_no, args.end_batch_no, args.batch_size = 0, 1, 10
     
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
         
-    main(args.path_to_reviews_df, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug)
+    main(args.path_to_reviews_df, args.out_dir, args.debug)
     
