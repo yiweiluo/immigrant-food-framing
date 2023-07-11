@@ -21,6 +21,7 @@ def load_reviews_df(path_to_reviews_df, debug):
         print(f"\nDebug mode OFF; reading in entire dataframe...")
         reviews_df = pd.read_pickle(path_to_reviews_df)
     reviews_df['biz_macro_region'] = reviews_df['biz_cuisine_region'].apply(lambda x: 'us' if x == 'us' else 'non-us')
+    reviews_df['biz_cuisines'] = reviews_df['biz_cuisines'].apply(lambda x: list(x))
 
     print(f"\tDone! Read in df with shape {reviews_df.shape}.")
     print(reviews_df.head())
@@ -133,10 +134,10 @@ def save_res(res, savename):
     df = df[1:]
     df.to_csv(savename, index=False)
     
-def _do_regression(df, dep_var, cuisine_ind_var, covariates, out_dir):
+def _do_regression(df, dep_var, cuisine_ind_var, cuisine_ref, covariates, out_dir):
     
-    if cuisine_ind_var != 'cuisine':
-        formula = f"{dep_var} ~ C({cuisine_ind_var}, Treatment(reference='us'))"
+    if cuisine_ind_var != 'biz_cuisine':
+        formula = f"{dep_var} ~ C({cuisine_ind_var}, Treatment(reference='{cuisine_ref}'))"
         if 'review_len' in covariates:
             formula += ' + review_len'
         if 'biz_price_point' in covariates:
@@ -158,7 +159,7 @@ def _do_regression(df, dep_var, cuisine_ind_var, covariates, out_dir):
         biz_price_point.drop('biz_price_point_2', axis = 1, inplace=True)
         biz_cuisine = pd.get_dummies(df['biz_cuisines'].explode()).groupby(level=0).sum()
         biz_cuisine.columns = [f'biz_cuisine_{x}' for x in biz_cuisine]
-        fullX = pd.concat([X, biz_price_level, biz_cuisine], axis=1)
+        fullX = pd.concat([X, biz_price_point, biz_cuisine], axis=1)
 
         mod = sm.OLS(Y, fullX)
     
@@ -166,9 +167,14 @@ def _do_regression(df, dep_var, cuisine_ind_var, covariates, out_dir):
     print()
     print(modf.summary())
     
-    abs_coeffs = get_abs_coeffs(modf, ref='us')
-    abs_errs = get_abs_errs(modf, ref='us')
-    pvalues = get_pvalues(modf, ref='us')
+    if cuisine_ind_var != 'biz_cuisine':
+        abs_coeffs = get_abs_coeffs(modf, ref='us')
+        abs_errs = get_abs_errs(modf, ref='us')
+        pvalues = get_pvalues(modf, ref='us')
+    else:
+        abs_coeffs = get_abs_per_cuisine_coeffs(modf)
+        abs_errs = get_abs_per_cuisine_errs(modf)
+        pvalues = get_per_cuisine_pvals(modf)
     print("\tabsolute coeffs:",abs_coeffs)
     print("\tabsolute errs:",abs_errs)
     print("\tpvalues:",pvalues)
@@ -182,14 +188,20 @@ def do_all_regressions(out_dir, df):
     
     print("\nDoing Study 1 regressions on full reviews set...")
     covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
-    for dep_var in ['exotic_words_agg_score']:
+    for dep_var in ['exotic_words_agg_score']:#,'auth_words_agg_score','typic_words_agg_score']:
         for cuisine_ind_var in ['biz_macro_region','biz_cuisine_region','biz_cuisine']:
-            _do_regression(df, dep_var, cuisine_ind_var, covariates, out_dir)
+            _do_regression(df, dep_var, cuisine_ind_var, 'us', covariates, out_dir)
             
-    # add per-cuisine
     # add race-othering
     
-    # Study 2
+#     # Study 2
+#     print("\nDoing Study 2 regressions on full reviews set...")
+#     covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
+#     for dep_var in ['filtered_liwc_posemo_agg_score','luxury_words_agg_score',
+#                     'hygiene_words_agg_score','hygiene_pos_words_agg_score','hygiene_neg_words_agg_score',
+#                     'cheapness_words_agg_score','cheapness_exp_words_agg_score','cheapness_cheap_words_agg_score']:
+#         for cuisine_ind_var in ['biz_macro_region','biz_cuisine_region','biz_cuisine']:
+#             _do_regression(df, dep_var, cuisine_ind_var, 'europe', covariates, out_dir)
     # Study 2 glass ceiling
     
     # top-cuisine removed
