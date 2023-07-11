@@ -121,7 +121,8 @@ def extract_all_frames(
     end_batch_no=None,
     print_every=500,
     save_every=100,
-    guid='review_id'
+    guid='review_id',
+    text_field='text'
 ):    
     """Extracts ngrams of (dependent, anchor) tuples from reviews."""
     
@@ -174,7 +175,7 @@ def extract_all_frames(
                 
                 if (row_ix % print_every == 0):
                     print(f"\nOn doc {doc_ix} of batch {batch_no}")
-                    print("Review text:", row['text'][:50])
+                    print("Review text:", row[text_field][:50])
                 
                 full_tokens = extract_frames_from_doc(doc, pos_tag_set=pos_tags)
                 
@@ -314,15 +315,15 @@ def create_frames_lookup(lemmas_per_review, out_dir, debug):
     
     return D
     
-def main(path_to_df, path_to_parsed, out_dir, guid, start_batch_no, end_batch_no, from_cache, debug):
+def main(path_to_df, path_to_parsed, out_dir, guid, start_batch_no, end_batch_no, text_field, from_cache, debug):
     if not from_cache:
         raw_df = load_raw_df(path_to_df)
         parsed_docs, batch_size = load_parsed_docs(path_to_parsed)
         batched_df = batch_df(raw_df, batch_size)
         lemmas_per_review = extract_all_frames(batched_df, parsed_docs, path_to_parsed, out_dir, batch_size, from_cache, 
-                                               start_batch_no=start_batch_no, end_batch_no=end_batch_no, guid=guid)
+                                               start_batch_no=start_batch_no, end_batch_no=end_batch_no, guid=guid, text_field=text_field)
     else:
-        lemmas_per_review = extract_all_frames(None, None, None, out_dir, None, from_cache)
+        lemmas_per_review = extract_all_frames(None, None, None, out_dir, None, from_cache, guid=guid, text_field=text_field)
     create_frames_lookup(lemmas_per_review, out_dir, debug)
     print("\n\nAll done!")
     
@@ -341,11 +342,13 @@ if __name__ == "__main__":
                         help='start batch index')
     parser.add_argument('--end_batch_no', type=int, default=1025,
                         help='end batch index (non-inclusive)')
+    parser.add_argument('--text_field', type=str, default='text',
+                        help='column name(s) for text fields')
     parser.add_argument('--from_cache', action='store_true',
                         help='whether to load extracted ngrams from cache')
     parser.add_argument('--debug', action='store_true',
                         help='whether to test frames_lookup.pkl')
     args = parser.parse_args()
         
-    main(args.path_to_raw, args.path_to_parsed, args.out_dir, args.guid, args.start_batch_no, args.end_batch_no, args.from_cache, args.debug)
+    main(args.path_to_raw, args.path_to_parsed, args.out_dir, args.guid, args.start_batch_no, args.end_batch_no, args.text_field, args.from_cache, args.debug)
     

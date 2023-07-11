@@ -11,5 +11,5 @@ python 1_spacy_process_texts.py --path_to_texts ../data/llm/gpt3_reviews_concat.
 
 `2_extract_frames.py` extracts adjectival features from the parsed review data and creates a lookup dictionary `frames_lookup.pkl` that stores the extracted features per review. All default arguments can be used to process Yelp reviews. To process GPT reviews, run the following:
 ```
-python 2_extract_frames.py --path_to_raw ../data/llm/gpt3_reviews_concat.csv --path_to_parsed ../data/llm/spacy_processed --out_dir ../data/llm/spacy_processed --guid lookup_guid
+python 2_extract_frames.py --path_to_raw ../data/llm/gpt3_reviews_concat.csv --path_to_parsed ../data/llm/spacy_processed --out_dir ../data/llm --guid lookup_guid --text_field review_no_disclaimers
 ```
