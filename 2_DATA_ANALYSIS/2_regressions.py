@@ -334,24 +334,24 @@ def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=s
         print("\nDistribution over cuisines of unskewed superyelper reviews:")
         print(df['biz_cuisine_region'].value_counts())
     
-#     # Study 1
-#     print("\nDoing Study 1 regressions...")
-#     covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
-#     for dep_var in ['exotic_words_agg_score','auth_words_agg_score','auth_simple_words_agg_score','auth_other_words_agg_score','typic_words_agg_score']:
-#         for cuisine_ind_var in ['biz_macro_region','biz_cuisine_region','biz_cuisine']:
-#             _do_regression(df, dep_var, cuisine_ind_var, 'us', 2, covariates, out_dir, prefix, user_controlled=user_controlled, overwrite=True)
+    # Study 1
+    print("\nDoing Study 1 regressions...")
+    covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
+    for dep_var in ['exotic_words_agg_score','auth_words_agg_score','auth_simple_words_agg_score','auth_other_words_agg_score','typic_words_agg_score']:
+        for cuisine_ind_var in ['biz_macro_region','biz_cuisine_region','biz_cuisine']:
+            _do_regression(df, dep_var, cuisine_ind_var, 'us', 2, covariates, out_dir, prefix, user_controlled=user_controlled, overwrite=True)
             
-#     # Study 1 race-othering
-#     _do_race_regression(df, restaurants_df, 2, out_dir, prefix, user_controlled=user_controlled, overwrite=False)
+    # Study 1 race-othering
+    _do_race_regression(df, restaurants_df, 2, out_dir, prefix, user_controlled=user_controlled, overwrite=False)
     
-#     # Study 2
-#     print("\nDoing Study 2 regressions...")
-#     covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
-#     for dep_var in ['filtered_liwc_posemo_agg_score','luxury_words_agg_score',
-#                     'hygiene_words_agg_score','hygiene_pos_words_agg_score','hygiene_neg_words_agg_score',
-#                     'cheapness_words_agg_score','cheapness_exp_words_agg_score','cheapness_cheap_words_agg_score']:
-#         for cuisine_ind_var in ['biz_cuisine_region','biz_cuisine']:
-#             _do_regression(df, dep_var, cuisine_ind_var, 'europe', 2, covariates, out_dir, prefix, user_controlled=user_controlled, overwrite=True)
+    # Study 2
+    print("\nDoing Study 2 regressions...")
+    covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
+    for dep_var in ['filtered_liwc_posemo_agg_score','luxury_words_agg_score',
+                    'hygiene_words_agg_score','hygiene_pos_words_agg_score','hygiene_neg_words_agg_score',
+                    'cheapness_words_agg_score','cheapness_exp_words_agg_score','cheapness_cheap_words_agg_score']:
+        for cuisine_ind_var in ['biz_cuisine_region','biz_cuisine']:
+            _do_regression(df, dep_var, cuisine_ind_var, 'europe', 2, covariates, out_dir, prefix, user_controlled=user_controlled, overwrite=True)
     
     # Study 2 glass ceiling
     print("\nDoing Study 2 regressions within $$$-$$$$ price point restaurants...")
