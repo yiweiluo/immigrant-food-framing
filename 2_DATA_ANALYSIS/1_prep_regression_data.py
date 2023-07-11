@@ -227,7 +227,13 @@ def create_reviews_df(review_ids, raw_reviews, framing_scores_lookup, out_dir, d
     
     return per_review_df
 
-def hydrate_reviews_with_biz_data(restaurants_df, reviews_df, out_dir):
+def hydrate_reviews_with_biz_user_data(restaurants_df, reviews_df, out_dir):
+    print("\nHydrating reviews df with user data...")
+    review_id2user_id = pd.read_csv('data/yelp/review_id2user_id.csv')
+    review_id2user_id = dict(zip(review_id2user_id['review_id'], review_id2user_id['user_id']))
+    reviews_df['user_id'] = reviews_df['review_id'].apply(lambda x: review_id2user_id[x])
+    print("\tDone!")
+    
     print("\nHydrating reviews df with restaurant-related fields...")
     field2col_name = {'median_nb_income': 'Median household income in the past 12 months (2020 inflation-adjusted dollars)',
                       'nb_diversity': 'Race_Simpson_Diversity_Index',
@@ -276,7 +282,7 @@ def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, out_d
     review_ids = get_filtered_business_reviews(filtered_restaurants, raw_reviews)
     master_frame_lookup = load_frame_lookups(path_to_framing_scores, debug)
     reviews_df = create_reviews_df(review_ids, raw_reviews, master_frame_lookup, out_dir, debug)
-    hydrated_reviews_df = hydrate_reviews_with_biz_data(filtered_restaurants, reviews_df, out_dir)
+    hydrated_reviews_df = hydrate_reviews_with_biz_user_data(filtered_restaurants, reviews_df, out_dir)
     
 if __name__ == "__main__":
     
