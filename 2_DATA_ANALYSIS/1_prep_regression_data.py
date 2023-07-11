@@ -18,6 +18,10 @@ TOP_CUISINES = set(['american (traditional)','american (new)','cajun/creole','so
                     'italian','mediterranean','greek','french','irish','spanish',
                     'chinese','japanese','thai','vietnamese','indian','korean',])
 
+ethnic_cats_per_continent = pd.read_csv('../ethnic_cats_per_continent.csv')
+ethnic_cats_per_continent = ethnic_cats_per_continent.loc[ethnic_cats_per_continent['region'].isin(REGIONS)]
+ethnic_cat2continent = dict(zip(ethnic_cats_per_continent['cuisine'],ethnic_cats_per_continent['region']))
+
 def _is_restaurant(cat_set, search_set={'restaurants','food'}):
     return len(cat_set.intersection(search_set)) > 0
 
@@ -229,6 +233,40 @@ def create_reviews_df(review_ids, raw_reviews, guid, framing_scores_lookup, out_
     
     return per_review_df
 
+def hydrate_llm_reviews(og_reviews, reviews_df, out_dir):
+#     og_reviews = pd.read_csv(path_to_og_reviews)
+    print("\nHydrating reviews df with meta-info fields...")
+    field2col_name = {'sentiment': 'sentiment',
+                      'price_point': 'star',
+                      'cuisine_region': 'cuisine',
+                      'cuisines': 'cuisine'}
+    
+    for field in tqdm(field2col_name):
+        if field == 'cuisines':
+            field_lookup = dict(zip(og_reviews['lookup_guid'], 
+                                            og_reviews[field2col_name[field]].apply(lambda x: {x}.intersection(TOP_CUISINES))))
+        elif field == 'cuisine_region':
+            field_lookup = dict(zip(og_reviews['lookup_guid'], 
+                                            og_reviews[field2col_name[field]].apply(lambda x: ethnic_cat2cont[x])))
+        else:
+            field_lookup = dict(zip(og_reviews['lookup_guid'], og_reviews[field2col_name[field]]))
+        
+        reviews_df[f"biz_{field}"] = reviews_df['review_id'].apply(lambda x: field_lookup[x])
+    print("\tDone! New reviews_df columns:", reviews_df.columns)
+    
+    print("\nCuisine region distribution:")
+    print(reviews_df['biz_cuisine_region'].value_counts())
+    print("\nIndividual cuisine distribution:")
+    for cuisine in TOP_CUISINES:
+        print(cuisine, len(reviews_df.loc[reviews_df['biz_cuisines'].apply(lambda x: cuisine in x)]))
+        
+    savename = os.path.join(out_dir, 'per_reviews_df.csv')
+    print(f"\nSaving hydrated df to: {savename}...")
+    reviews_df.to_pickle(savename)
+    print("\tDone!")
+    
+    return reviews_df
+
 def hydrate_reviews_with_biz_user_data(restaurants_df, reviews_df, out_dir):
     print("\nHydrating reviews df with user data...")
     review_id2user_id = pd.read_csv('data/yelp/review_id2user_id.csv')
@@ -292,6 +330,7 @@ def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, guid,
         master_frame_lookup = load_frame_lookups(path_to_framing_scores, debug)
         master_frame_lookup = master_frame_lookup[~master_frame_lookup.index.duplicated(keep='first')]
         reviews_df = create_reviews_df(review_ids, raw_reviews, guid, master_frame_lookup, out_dir, do_yelp, debug)
+        hydrated_reviews_df = hydrate_llm_reviews(raw_reviews, reviews_df, out_dir)
     
 if __name__ == "__main__":
     
