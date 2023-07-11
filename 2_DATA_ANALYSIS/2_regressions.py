@@ -17,6 +17,8 @@ TOP_CUISINES = set(['american (traditional)','american (new)','cajun/creole','so
                     'mexican','latin american','cuban',
                     'italian','mediterranean','greek','french','irish','spanish',
                     'chinese','japanese','thai','vietnamese','indian','korean',])
+REGIONS = {'us','europe','latin_america','asia'}
+TO_EXCLUDE = set(['ethnic food','asian fusion','tex-mex','caribbean','middle eastern'])
 
 def load_restaurants_df(path_to_restaurants_df):
     restaurant_data = pd.read_csv(path_to_restaurants_df,index_col=0)
@@ -28,15 +30,21 @@ def load_restaurants_df(path_to_restaurants_df):
     restaurant_data['pct_hisp'] = restaurant_data['Percentage hispanic']
     return restaurant_data
 
-def load_reviews_df(path_to_reviews_df, debug):
+def load_reviews_df(path_to_reviews_df, debug, do_yelp=True):
     print("\nReading in reviews_df...")
-    if False:#debug:
-        print(f"\nDebug mode ON; limiting to first 5000 lines...")
+    reviews_df = pd.read_pickle(path_to_reviews_df)
+    if do_yelp:
+        print(f"\nReading Yelp reviews dataframe...")
+        reviews_df['biz_macro_region'] = reviews_df['biz_cuisine_region'].apply(lambda x: 'us' if x == 'us' else 'non-us')
+        reviews_df['biz_cuisines'] = reviews_df['biz_cuisines'].apply(lambda x: list(x))
     else:
-        print(f"\nDebug mode OFF; reading in entire dataframe...")
-        reviews_df = pd.read_pickle(path_to_reviews_df)
-    reviews_df['biz_macro_region'] = reviews_df['biz_cuisine_region'].apply(lambda x: 'us' if x == 'us' else 'non-us')
-    reviews_df['biz_cuisines'] = reviews_df['biz_cuisines'].apply(lambda x: list(x))
+        print(f"\nReading LLM reviews dataframe...")
+        ethnic_cats_per_continent = pd.read_csv('../ethnic_cats_per_continent.csv')
+        ethnic_cats_per_continent = ethnic_cats_per_continent.loc[ethnic_cats_per_continent['region'].isin(REGIONS)]
+        ethnic_cat2continent = dict(zip(ethnic_cats_per_continent['cuisine'],ethnic_cats_per_continent['region']))
+        reviews_df = reviews_df.loc[reviews_df['cuisine'].apply(lambda x: x.lower() not in TO_EXCLUDE)]
+        reviews_df['biz_cuisine_region'] = reviews_df['cuisine'].apply(lambda x: ethnic_cat2continent[x.lower()])
+        reviews_df['biz_macro_region'] = reviews_df['biz_cuisine_region'].apply(lambda x: 'us' if x == 'us' else 'non-us')
 
     print(f"\tDone! Read in df with shape {reviews_df.shape}.")
     print(reviews_df.head())
@@ -44,14 +52,25 @@ def load_reviews_df(path_to_reviews_df, debug):
     print(reviews_df['biz_macro_region'].value_counts())
     print()
     print(reviews_df['biz_cuisine_region'].value_counts())
-    print()
-    print(reviews_df[['biz_median_nb_income','biz_nb_diversity']].describe())
+    if do_yelp:
+        print()
+        print(reviews_df[['biz_median_nb_income','biz_nb_diversity']].describe())
     
-    print("\nHydrating reviews df with user data...")
-    review_id2user_id = pd.read_csv('../data/yelp/review_id2user_id.csv')
-    review_id2user_id = dict(zip(review_id2user_id['review_id'], review_id2user_id['user_id']))
-    reviews_df['user_id'] = reviews_df['review_id'].apply(lambda x: review_id2user_id[x])
-    print("\tDone!")
+        print("\nHydrating reviews df with user data...")
+        review_id2user_id = pd.read_csv('../data/yelp/review_id2user_id.csv')
+        review_id2user_id = dict(zip(review_id2user_id['review_id'], review_id2user_id['user_id']))
+        reviews_df['user_id'] = reviews_df['review_id'].apply(lambda x: review_id2user_id[x])
+        print("\tDone!")
+    else:
+        reviews_df['biz_price_point'] = reviews_df['star'].apply(lambda x: {'$ ($10 and under)':1, 
+                                                                           '$$ ($10-$25)':2,
+                                                                           '$$$ ($25-$45)':3,
+                                                                           '$$$$ ($50 and up)':4}[x])
+        print("\nSubsampling LLM reviews to be stratified evenly across covariates besides length and sentiment...")
+        
+        print("\tDone!")
+    
+    print(reviews_df['biz_price_point'].value_counts())
     
     return reviews_df
 
@@ -59,7 +78,10 @@ def zscore_df(df, anchor='agg'):
     print(f"\nz-scoring non-dummy variables...")
     
     for feat in ["review_len","biz_mean_star_rating","biz_median_nb_income","biz_nb_diversity",'biz_nb_pct_asian','biz_nb_pct_hisp']:
-        df[f"{feat}"] = stats.zscore(df[feat])
+        try:
+            df[f"{feat}"] = stats.zscore(df[feat])
+        except KeyError:
+            pass
 
     dep_vars = [f"{var}_{anchor}_score" 
                 for var in ['exotic_words','auth_words','auth_simple_words','auth_other_words','typic_words',
@@ -80,7 +102,7 @@ def check_VIF(df):
              and 'cheapness_words' not in x
              and 'auth_words' not in x
              and '.' not in x]
-    X = df[inds]
+    X = df[[x for x in inds if x in df.columns]]
 
     vif_data = pd.DataFrame()
     vif_data["feature"] = X.columns
@@ -303,7 +325,7 @@ def _do_race_regression(df, restaurants_df, price_ref, out_dir, prefix, user_con
     print(hisp_othering_df)
     hisp_othering_df.to_csv(os.path.join(out_dir, f'{prefix}hisp_othering_median.csv'))
 
-def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=set(), user_controlled=False):
+def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=set(), user_controlled=False, do_yelp=True):
     
     if len(cuisines_to_remove) > 0:
         print("\nDoing OLS regressions with the following cuisines removed:", cuisines_to_remove)
@@ -336,17 +358,24 @@ def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=s
     
     # Study 1
     print("\nDoing Study 1 regressions...")
-    covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
+    if do_yelp:
+        covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
+    else:
+        covariates = ['review_len','sentiment']
     for dep_var in ['exotic_words_agg_score','auth_words_agg_score','auth_simple_words_agg_score','auth_other_words_agg_score','typic_words_agg_score']:
         for cuisine_ind_var in ['biz_macro_region','biz_cuisine_region','biz_cuisine']:
             _do_regression(df, dep_var, cuisine_ind_var, 'us', 2, covariates, out_dir, prefix, user_controlled=user_controlled, overwrite=True)
             
     # Study 1 race-othering
-    _do_race_regression(df, restaurants_df, 2, out_dir, prefix, user_controlled=user_controlled, overwrite=False)
+    if do_yelp:
+        _do_race_regression(df, restaurants_df, 2, out_dir, prefix, user_controlled=user_controlled, overwrite=False)
     
     # Study 2
     print("\nDoing Study 2 regressions...")
-    covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
+    if do_yelp:
+        covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
+    else:
+        covariates = ['review_len','sentiment']
     for dep_var in ['filtered_liwc_posemo_agg_score','luxury_words_agg_score',
                     'hygiene_words_agg_score','hygiene_pos_words_agg_score','hygiene_neg_words_agg_score',
                     'cheapness_words_agg_score','cheapness_exp_words_agg_score','cheapness_cheap_words_agg_score']:
@@ -355,7 +384,10 @@ def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=s
     
     # Study 2 glass ceiling
     print("\nDoing Study 2 regressions within $$$-$$$$ price point restaurants...")
-    covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
+    if do_yelp:
+        covariates = ['review_len','biz_price_point','biz_mean_star_rating','biz_median_nb_income','biz_nb_diversity']
+    else:
+        covariates = ['review_len','sentiment']
     for dep_var in ['filtered_liwc_posemo_agg_score','luxury_words_agg_score',
                     'hygiene_words_agg_score','hygiene_pos_words_agg_score','hygiene_neg_words_agg_score',
                     'cheapness_words_agg_score','cheapness_exp_words_agg_score','cheapness_cheap_words_agg_score']:
@@ -363,18 +395,19 @@ def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=s
             _do_regression(df.loc[df['biz_price_point'].isin({3,4})], dep_var, cuisine_ind_var, 'europe', 3, covariates, out_dir, 
                            f'{prefix}glass_ceiling_', user_controlled=user_controlled, overwrite=True)
 
-def main(path_to_restaurants_df, path_to_reviews_df, out_dir, debug):
-    restaurants = load_restaurants_df(path_to_restaurants_df)
-    reviews = load_reviews_df(path_to_reviews_df, debug)
+def main(path_to_restaurants_df, path_to_reviews_df, out_dir, debug, do_yelp):
+    if do_yelp:
+        restaurants = load_restaurants_df(path_to_restaurants_df)
+    reviews = load_reviews_df(path_to_reviews_df, debug, do_yelp=do_yelp)
     reviews = zscore_df(reviews)
     if not debug:
         check_VIF(reviews)
     else:
         print("Debug mode ON; skipping VIF step")
-    do_all_regressions(out_dir, '', reviews, restaurants)
-    do_all_regressions(out_dir, 'top_removed_', reviews, restaurants, {'american (traditional)', 'italian', 'mexican', 'chinese'})
-    do_all_regressions(out_dir, 'cajun-creole_removed_', reviews, restaurants, {'cajun/creole'})
-    do_all_regressions(out_dir, 'user_cont_', reviews, restaurants, user_controlled=True)
+#     do_all_regressions(out_dir, '', reviews, restaurants)
+#     do_all_regressions(out_dir, 'top_removed_', reviews, restaurants, {'american (traditional)', 'italian', 'mexican', 'chinese'})
+#     do_all_regressions(out_dir, 'cajun-creole_removed_', reviews, restaurants, {'cajun/creole'})
+#     do_all_regressions(out_dir, 'user_cont_', reviews, restaurants, user_controlled=True)
         
 if __name__ == "__main__":
     
@@ -387,6 +420,8 @@ if __name__ == "__main__":
                         help='directory to save output to')
     parser.add_argument('--debug', action='store_true',
                         help='whether to run on subset of data for debugging purposes')
+    parser.add_argument('--do_yelp', action='store_true',
+                        help='whether to run on Yelp reviews or LLM reviews')
     args = parser.parse_args()
     if not args.debug:
         print("\n******WARNING****** DEBUG MODE OFF!")
@@ -396,5 +431,5 @@ if __name__ == "__main__":
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
         
-    main(args.path_to_restaurants_df, args.path_to_reviews_df, args.out_dir, args.debug)
+    main(args.path_to_restaurants_df, args.path_to_reviews_df, args.out_dir, args.debug, args.do_yelp)
     
