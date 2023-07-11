@@ -8,6 +8,7 @@ import argparse
 from tqdm import tqdm, trange
 from collections import Counter, defaultdict
 import time
+import sys
 
 CHAIN_THRESHOLD = 1
 CATEGORIES_TO_EXCLUDE = {'cafe','fast food'}
@@ -124,7 +125,7 @@ def filter_businesses_for_regression(restaurant_data):
 
     return dat
 
-def load_raw_reviews(path_to_raw_reviews):
+def load_raw_reviews(path_to_raw_reviews, text_field):
     """Load raw reviews to get review-business relationships and review lengths."""
     
     print("\nLoading in raw reviews...")
@@ -133,7 +134,7 @@ def load_raw_reviews(path_to_raw_reviews):
     print(f"\tRead in {len(raw_df)} reviews.")
     
     print("\nGetting review lengths...")
-    raw_df['len'] = raw_df['text'].apply(lambda x: len(x.split( )) if type(x) == str else 0)
+    raw_df['len'] = raw_df[text_field].apply(lambda x: len(x.split( )) if type(x) == str else 0)
     print("\tDone! Review length distribution:")
     print(raw_df['len'].describe())
     
@@ -169,9 +170,10 @@ def load_frame_lookups(path_to_framing_scores, debug):
     
     return master_lookup
 
-def create_reviews_df(review_ids, raw_reviews, framing_scores_lookup, out_dir, debug):
-    review_id2len = dict(zip(raw_reviews['review_id'], raw_reviews['len']))
-    review_id2biz_id = dict(zip(raw_reviews['review_id'], raw_reviews['business_id']))
+def create_reviews_df(review_ids, raw_reviews, guid, framing_scores_lookup, out_dir, do_yelp, debug):
+    review_id2len = dict(zip(raw_reviews[guid], raw_reviews['len']))
+    if do_yelp:
+        review_id2biz_id = dict(zip(raw_reviews[guid], raw_reviews['business_id']))
     
     feat_lists = glob.glob('feature_dicts/*.txt')
     feat_dict = {}
@@ -182,7 +184,6 @@ def create_reviews_df(review_ids, raw_reviews, framing_scores_lookup, out_dir, d
     avail_feats = [x.split('/')[-1].split('.txt')[0] for x in feat_lists]
     
     review_ids_avail = set([x.split('|')[0] for x in framing_scores_lookup.index])
-#     print("Sample review IDs available:", list(review_ids_avail)[:5])
     
     review_ids_for_df = set(review_ids).intersection(review_ids_avail)
     missing_ids = set(review_ids).difference(review_ids_avail)
@@ -193,7 +194,8 @@ def create_reviews_df(review_ids, raw_reviews, framing_scores_lookup, out_dir, d
     for review_id in tqdm(review_ids_for_df):
         per_review_df['review_id'].append(review_id)
         per_review_df['review_len'].append(review_id2len[review_id])
-        per_review_df['biz_id'].append(review_id2biz_id[review_id])
+        if do_yelp:
+            per_review_df['biz_id'].append(review_id2biz_id[review_id])
         
         # Add framing scores
         for feat in avail_feats:
@@ -275,14 +277,21 @@ def hydrate_reviews_with_biz_user_data(restaurants_df, reviews_df, out_dir):
     
     return reviews_df
     
-def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, out_dir, debug):
-    restaurants = prep_census_enriched_df(path_to_enriched_df)
-    filtered_restaurants = filter_businesses_for_regression(restaurants)
-    raw_reviews = load_raw_reviews(path_to_raw_reviews)
-    review_ids = get_filtered_business_reviews(filtered_restaurants, raw_reviews)
-    master_frame_lookup = load_frame_lookups(path_to_framing_scores, debug)
-    reviews_df = create_reviews_df(review_ids, raw_reviews, master_frame_lookup, out_dir, debug)
-    hydrated_reviews_df = hydrate_reviews_with_biz_user_data(filtered_restaurants, reviews_df, out_dir)
+def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, guid, text_field, out_dir, do_yelp, debug):
+    if do_yelp:
+        restaurants = prep_census_enriched_df(path_to_enriched_df)
+        filtered_restaurants = filter_businesses_for_regression(restaurants)
+        raw_reviews = load_raw_reviews(path_to_raw_reviews, text_field)
+        review_ids = get_filtered_business_reviews(filtered_restaurants, raw_reviews)
+        master_frame_lookup = load_frame_lookups(path_to_framing_scores, debug)
+        reviews_df = create_reviews_df(review_ids, raw_reviews, guid, master_frame_lookup, out_dir, do_yelp, debug)
+        hydrated_reviews_df = hydrate_reviews_with_biz_user_data(filtered_restaurants, reviews_df, out_dir)
+    else:
+        raw_reviews = load_raw_reviews(path_to_raw_reviews, text_field)
+        review_ids = set(raw_reviews[guid].values).difference({'error'})
+        master_frame_lookup = load_frame_lookups(path_to_framing_scores, debug)
+        master_frame_lookup = master_frame_lookup[~master_frame_lookup.index.duplicated(keep='first')]
+        reviews_df = create_reviews_df(review_ids, raw_reviews, guid, master_frame_lookup, out_dir, do_yelp, debug)
     
 if __name__ == "__main__":
     
@@ -293,8 +302,14 @@ if __name__ == "__main__":
                         help='where to read in raw reviews dataframe from')
     parser.add_argument('--path_to_framing_scores', type=str, default='../data/yelp/restaurants_only/agg_frame_lookups',
                         help='where to read in framing scores from')
+    parser.add_argument('--guid', type=str, default='review_id',
+                        help='col name for GUID')
+    parser.add_argument('--text_field', type=str, default='text',
+                        help='col name for review text')
     parser.add_argument('--out_dir', type=str, default='../data/yelp/restaurants_only',
                         help='directory to save output to')
+    parser.add_argument('--do_yelp', action='store_true',
+                        help='whether to run on Yelp reviews or LLM reviews')
     parser.add_argument('--debug', action='store_true',
                         help='whether to run on subset of data for debugging purposes')
     args = parser.parse_args()
@@ -306,5 +321,5 @@ if __name__ == "__main__":
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
         
-    main(args.path_to_enriched_df, args.path_to_raw_reviews, args.path_to_framing_scores, args.out_dir, args.debug)
+    main(args.path_to_enriched_df, args.path_to_raw_reviews, args.path_to_framing_scores, args.guid, args.text_field, args.out_dir, args.do_yelp, args.debug)
     

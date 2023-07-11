@@ -105,10 +105,10 @@ def aggregate_features(lookup, anchor_dict, out_dir, add_to_cache, debug, save_e
                 if no_neg_score == 0:
                     no_neg_matches = -1
                 agg_feats_per_review[f"{review_id}|{feat}_{anchor_type}"] = {'score':no_neg_score, 'matches':json.dumps(no_neg_matches)}
-        
+                        
         if debug and _ == 9:
             print("\tSaving test aggregated features dict...")
-            pd.DataFrame(agg_feats_per_review).T.to_csv(os.path.join(out_dir, "test_aggregated_frames_lookup.csv"), index=True)
+            pd.DataFrame(agg_feats_per_review).T.to_csv(os.path.join(out_dir, "tmp", "test_aggregated_frames_lookup.csv"), index=True)
             print("\t\tDone!")
             sys.exit()
             
