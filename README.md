@@ -7,5 +7,5 @@ code and data for project on Othering and Low Prestige Framing of Immigrant Food
 - Download spaCy models:
 	- `python -m spacy download en_core_web_lg`
 	- `python -m coreferee install en`
-- download [Yelp Open dataset](https://www.yelp.com/dataset) *NB: This dataset appears to be frequently updated by Yelp*
-
+- Download [Yelp Open dataset](https://www.yelp.com/dataset) *NB: This dataset appears to be frequently updated by Yelp*
+- Download synthetic GPT-3.5 reviews and other larger data files from [this drive folder](https://drive.google.com/drive/folders/1HkQxVasiLBcW-VNtpOapKZ_8xdP-mpdm?usp=sharing)
