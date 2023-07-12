@@ -25,6 +25,13 @@ For GPT reviews, run the following:
 python 2_regressions.py --path_to_reviews_df ../data/llm/per_reviews_df.csv --out_dir llm_results
 ```
 
-`3_fightin_words.py` computes z-scores of weighted log odds ratios to qualitatively analyze features associated with each cuisine (region) using the method from Monroe et al. (2008).
+`3_fightin_words.py` computes z-scores of weighted log odds ratios to qualitatively analyze features associated with each cuisine (region) using the method from Monroe et al. (2008). For Yelp reviews, run the following:
+```
+python 3_fightin_words.py --do_yelp
+```
+For GPT reviews, run the following:
+```
+python 3_fightin_words.py --path_to_reviews_df ../data/llm/per_reviews_df.csv --path_to_lookup ../data/llm/frames_lookup.pkl --out_dir llm_fightin_words_results
+```
 
-`plotting.ipynb` is a Jupyter notebook for visualizing results.
+Finally, `plotting.ipynb` is a Jupyter notebook for visualizing regression results.
