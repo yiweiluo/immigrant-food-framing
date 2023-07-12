@@ -9,3 +9,5 @@ code and data for project on Othering and Low Prestige Framing of Immigrant Food
 	- `python -m coreferee install en`
 - Download [Yelp Open dataset](https://www.yelp.com/dataset) *NB: This dataset appears to be frequently updated by Yelp*
 - Download synthetic GPT-3.5 reviews and other larger data files from [this drive folder](https://drive.google.com/drive/folders/1HkQxVasiLBcW-VNtpOapKZ_8xdP-mpdm?usp=sharing)
+    - Place the file `gpt3_reviews_concat.csv` in a subdirectory with the path `data/llm` 
+    - Unzip `spacy_processed_coref_output.zip` and place the contents in a subdirectoy with the path `data/yelp/restaurants_only`
