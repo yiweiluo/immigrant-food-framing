@@ -326,6 +326,20 @@ def _do_race_regression(df, restaurants_df, price_ref, out_dir, prefix, user_con
     hisp_othering_df = pd.DataFrame(hisp_othering_df)
     print(hisp_othering_df)
     hisp_othering_df.to_csv(os.path.join(out_dir, f'{prefix}hisp_othering_median.csv'))
+    
+    # interaction effect version
+    for dep_var in ['exotic_words_agg_score','auth_words_agg_score','typic_words_agg_score']:
+        mod = smf.ols(formula=f"{dep_var} ~ C(biz_price_point, Treatment(reference={price_ref})) + C(biz_cuisine_region, Treatment(reference='us')) + C(biz_cuisine_region, Treatment(reference='us')):biz_nb_pct_asian + review_len + biz_mean_star_rating + biz_median_nb_income + biz_nb_diversity", data=df)
+        modf = mod.fit()
+        print(modf.summary())
+        savefile = os.path.join(out_dir, f"{prefix}asian_{dep_var}_othering_median_interaction.csv")
+        save_res(modf, savefile, user_controlled=False)
+    for dep_var in ['exotic_words_agg_score','auth_words_agg_score','typic_words_agg_score']:
+        mod = smf.ols(formula=f"{dep_var} ~ C(biz_price_point, Treatment(reference={price_ref})) + C(biz_cuisine_region, Treatment(reference='us')) + C(biz_cuisine_region, Treatment(reference='us')):biz_nb_pct_hisp + review_len + biz_mean_star_rating + biz_median_nb_income + biz_nb_diversity", data=df)
+        modf = mod.fit()
+        print(modf.summary())
+        savefile = os.path.join(out_dir, f"{prefix}hisp_{dep_var}_othering_median_interaction.csv")
+        save_res(modf, savefile, user_controlled=user_controlled)
 
 def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=set(), user_controlled=False, do_yelp=True):
     
