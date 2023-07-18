@@ -1,5 +1,5 @@
 # immigrant-food-framing
-code and data for project on Othering and Low Prestige Framing of Immigrant Food in US Restaurant Reviews and LLMs
+Code and data for [paper](https://arxiv.org/abs/2307.07645) on Othering and Low Prestige Framing of Immigrant Food in US Restaurant Reviews and LLMs.
 
 # Getting started
 - Create and activate a Python 3.6.8 virtualenv (repo has not been tested with other versions)
