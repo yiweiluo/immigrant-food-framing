@@ -178,7 +178,7 @@ def save_res(res, savename, user_controlled=False):
         df = df[1:]
         df.to_csv(savename, index=False)
     
-def _do_regression(df, dep_var, cuisine_ind_var, cuisine_ref, price_ref, covariates, out_dir, prefix, user_controlled=False, overwrite=False):
+def _do_regression(df, dep_var, cuisine_ind_var, cuisine_ref, price_ref, covariates, out_dir, prefix, user_controlled=False, overwrite=False, sentiment_ref_level='Neutral'):
     
     savefile = os.path.join(out_dir, f"{prefix}{dep_var}_{cuisine_ind_var}.csv")
     if not overwrite and os.path.exists(savefile):
@@ -197,7 +197,7 @@ def _do_regression(df, dep_var, cuisine_ind_var, cuisine_ref, price_ref, covaria
             if 'biz_nb_diversity' in covariates:
                 formula += ' + biz_nb_diversity'
             if 'biz_sentiment' in covariates:
-                formula += " + C(biz_sentiment, Treatment(reference='Neutral'))"
+                formula += f" + C(biz_sentiment, Treatment(reference='{sentiment_ref_level}'))"
             print(f"\nPerforming regression with the following formula: {formula}")
             
             if user_controlled:
@@ -341,7 +341,7 @@ def _do_race_regression(df, restaurants_df, price_ref, out_dir, prefix, user_con
         savefile = os.path.join(out_dir, f"{prefix}hisp_{dep_var}_othering_median_interaction.csv")
         save_res(modf, savefile, user_controlled=user_controlled)
 
-def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=set(), user_controlled=False, do_yelp=True):
+def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=set(), user_controlled=False, do_yelp=True, sentiment_ref_level='Neutral'):
     
     if len(cuisines_to_remove) > 0:
         print("\nDoing OLS regressions with the following cuisines removed:", cuisines_to_remove)
@@ -384,7 +384,7 @@ def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=s
 #     print("Debug: covariates", covariates)
     for dep_var in ['exotic_words_agg_score','auth_words_agg_score','auth_simple_words_agg_score','auth_other_words_agg_score','typic_words_agg_score']:
         for cuisine_ind_var in ind_vars:
-            _do_regression(df, dep_var, cuisine_ind_var, 'us', 2, covariates, out_dir, prefix, user_controlled=user_controlled, overwrite=True)
+            _do_regression(df, dep_var, cuisine_ind_var, 'us', 2, covariates, out_dir, prefix, user_controlled=user_controlled, overwrite=True, sentiment_ref_level=sentiment_ref_level)
             
     # Study 1 race-othering
     if do_yelp:
@@ -402,7 +402,7 @@ def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=s
                     'hygiene_words_agg_score','hygiene_pos_words_agg_score','hygiene_neg_words_agg_score',
                     'cheapness_words_agg_score','cheapness_exp_words_agg_score','cheapness_cheap_words_agg_score']:
         for cuisine_ind_var in ind_vars:
-            _do_regression(df, dep_var, cuisine_ind_var, 'europe', 2, covariates, out_dir, prefix, user_controlled=user_controlled, overwrite=True)
+            _do_regression(df, dep_var, cuisine_ind_var, 'europe', 2, covariates, out_dir, prefix, user_controlled=user_controlled, overwrite=True, sentiment_ref_level=sentiment_ref_level)
     
     # Study 2 glass ceiling
     print("\nDoing Study 2 regressions within $$$-$$$$ price point restaurants...")
@@ -417,9 +417,9 @@ def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=s
                     'cheapness_words_agg_score','cheapness_exp_words_agg_score','cheapness_cheap_words_agg_score']:
         for cuisine_ind_var in ind_vars:
             _do_regression(df.loc[df['biz_price_point'].isin({3,4})], dep_var, cuisine_ind_var, 'europe', 3, covariates, out_dir, 
-                           f'{prefix}glass_ceiling_', user_controlled=user_controlled, overwrite=True)
+                           f'{prefix}glass_ceiling_', user_controlled=user_controlled, overwrite=True, sentiment_ref_level=sentiment_ref_level)
 
-def main(path_to_restaurants_df, path_to_reviews_df, out_dir, debug, do_yelp):
+def main(path_to_restaurants_df, path_to_reviews_df, out_dir, debug, do_yelp, sentiment_ref):
     if do_yelp:
         restaurants = load_restaurants_df(path_to_restaurants_df)
     else:
@@ -431,9 +431,9 @@ def main(path_to_restaurants_df, path_to_reviews_df, out_dir, debug, do_yelp):
     else:
         print("Debug mode ON; skipping VIF step")
         
-    do_all_regressions(out_dir, '', reviews, restaurants, {}, do_yelp=do_yelp)
-    do_all_regressions(out_dir, 'top_removed_', reviews, restaurants, {'american (traditional)', 'american', 'italian', 'mexican', 'chinese'}, do_yelp=do_yelp)
-    do_all_regressions(out_dir, 'cajun-creole_removed_', reviews, restaurants, {'cajun/creole','cajun','creole'}, do_yelp=do_yelp)
+    do_all_regressions(out_dir, '', reviews, restaurants, {}, do_yelp=do_yelp, sentiment_ref_level=sentiment_ref)
+    do_all_regressions(out_dir, 'top_removed_', reviews, restaurants, {'american (traditional)', 'american', 'italian', 'mexican', 'chinese'}, do_yelp=do_yelp, sentiment_ref_level=sentiment_ref)
+    do_all_regressions(out_dir, 'cajun-creole_removed_', reviews, restaurants, {'cajun/creole','cajun','creole'}, do_yelp=do_yelp, sentiment_ref_level=sentiment_ref)
     if do_yelp:
         do_all_regressions(out_dir, 'user_cont_', reviews, restaurants, user_controlled=True, do_yelp=do_yelp)
         
@@ -450,6 +450,8 @@ if __name__ == "__main__":
                         help='whether to run on subset of data for debugging purposes')
     parser.add_argument('--do_yelp', action='store_true',
                         help='whether to run on Yelp reviews or LLM reviews')
+    parser.add_argument('--sentiment_ref', type=str, default='Neutral',
+                        help='sentiment reference level for LLM reviews')
     args = parser.parse_args()
     if not args.debug:
         print("\n******WARNING****** DEBUG MODE OFF!")
@@ -459,5 +461,5 @@ if __name__ == "__main__":
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
         
-    main(args.path_to_restaurants_df, args.path_to_reviews_df, args.out_dir, args.debug, args.do_yelp)
+    main(args.path_to_restaurants_df, args.path_to_reviews_df, args.out_dir, args.debug, args.do_yelp, args.sentiment_ref)
     

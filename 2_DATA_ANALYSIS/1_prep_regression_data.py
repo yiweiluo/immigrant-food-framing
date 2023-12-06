@@ -180,6 +180,9 @@ def create_reviews_df(review_ids, raw_reviews, guid, framing_scores_lookup, out_
     review_id2len = dict(zip(raw_reviews[guid], raw_reviews['len']))
     if do_yelp:
         review_id2biz_id = dict(zip(raw_reviews[guid], raw_reviews['business_id']))
+    else:
+        review_id2model = dict(zip(raw_reviews[guid], raw_reviews['model']))
+        review_id2prompt_ix = dict(zip(raw_reviews[guid], raw_reviews['prompt_ix']))
     
     feat_lists = glob.glob('feature_dicts/*.txt')
     feat_dict = {}
@@ -202,6 +205,10 @@ def create_reviews_df(review_ids, raw_reviews, guid, framing_scores_lookup, out_
         per_review_df['review_len'].append(review_id2len[review_id])
         if do_yelp:
             per_review_df['biz_id'].append(review_id2biz_id[review_id])
+        else:
+            # add model and prompt template used
+            per_review_df['model'].append(review_id2model[review_id])
+            per_review_df['prompt_ix'].append(review_id2prompt_ix[review_id])
         
         # Add framing scores
         for feat in avail_feats:
