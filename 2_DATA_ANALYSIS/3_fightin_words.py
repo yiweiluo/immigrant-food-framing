@@ -23,7 +23,7 @@ anchor_type2anchors = {
 all_anchors = set(anchor_type2anchors['food']) | set(anchor_type2anchors['service']) | \
                 set(anchor_type2anchors['establishment'])
 
-def load_reviews_df(path_to_reviews_df, do_yelp=True):
+def load_reviews_df(path_to_reviews_df, do_yelp=True, model='gpt-3.5-turbo-0613', prompt_ix=0):
     print("\nReading in reviews_df...")
     reviews_df = pd.read_pickle(path_to_reviews_df)
     reviews_df['biz_macro_region'] = reviews_df['biz_cuisine_region'].apply(lambda x: 'us' if x == 'us' else 'non-us')
@@ -47,6 +47,10 @@ def load_reviews_df(path_to_reviews_df, do_yelp=True):
     else:
         print(reviews_df['biz_sentiment'].value_counts())
         print(reviews_df['biz_sentiment'].value_counts(normalize=True))
+        
+        print(f"\nSubsetting LLM reviews to those written by {model} with prompt template no. {prompt_ix}...")
+        reviews_df = reviews_df.loc[(reviews_df['model']==model) & (reviews_df['prompt_ix']==prompt_ix)].copy()
+        print(f'\tNew number of reviews: {len(reviews_df)}')
         
         print("\nSubsampling LLM reviews to be stratified evenly across covariates besides length and sentiment...")
         print(reviews_df['biz_cuisine_region'].value_counts())
@@ -210,8 +214,8 @@ def fightin_words_report(out_dir, df, features_lookup, guid, feature_list, NEGAT
 
     print("\tDone!")
     
-def main(path_to_reviews_df, path_to_lookup, guid, out_dir, do_yelp):
-    reviews = load_reviews_df(path_to_reviews_df, do_yelp=do_yelp)
+def main(path_to_reviews_df, path_to_lookup, guid, out_dir, do_yelp, model, prompt_ix):
+    reviews = load_reviews_df(path_to_reviews_df, do_yelp=do_yelp, model=model, prompt_ix=prompt_ix)
     feature_lookup = load_lookup(path_to_lookup)
     # most distinctive othering words
     fightin_words_report(out_dir, reviews, feature_lookup, guid, feature_list={'exotic_words_agg','auth_words_agg','typic_words_agg'})
@@ -233,10 +237,20 @@ if __name__ == "__main__":
                         help='directory to save output to')
     parser.add_argument('--do_yelp', action='store_true',
                         help='whether to run on Yelp reviews or LLM reviews')
+    parser.add_argument('--model', type=str, default='gpt-3.5-turbo-0613',
+                        help='GPT model to subset LLM analysis to')
+    parser.add_argument('--prompt_index', type=int, default=0,
+                        help='GPT prompt template number to subset LLM analysis to')
     args = parser.parse_args()
     
-    if not os.path.exists(args.out_dir):
-        os.makedirs(args.out_dir)
+    if not args.do_yelp:
+        out_dir = f'{args.model}_prompt-{args.prompt_index}_{args.out_dir}'
+        print(f"\nWill write results to: {out_dir}")
+    else:
+        out_dir = args.out_dir
+    
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
         
-    main(args.path_to_reviews_df, args.path_to_lookup, args.guid, args.out_dir, args.do_yelp)
+    main(args.path_to_reviews_df, args.path_to_lookup, args.guid, out_dir, args.do_yelp, args.model, args.prompt_index)
     

@@ -31,7 +31,7 @@ def load_restaurants_df(path_to_restaurants_df):
     restaurant_data['pct_hisp'] = restaurant_data['Percentage hispanic']
     return restaurant_data
 
-def load_reviews_df(path_to_reviews_df, debug, do_yelp=True):
+def load_reviews_df(path_to_reviews_df, debug, do_yelp=True, model=None, prompt_ix=None):
     print("\nReading in reviews_df...")
     reviews_df = pd.read_pickle(path_to_reviews_df)
     reviews_df['biz_macro_region'] = reviews_df['biz_cuisine_region'].apply(lambda x: 'us' if x == 'us' else 'non-us')
@@ -55,6 +55,10 @@ def load_reviews_df(path_to_reviews_df, debug, do_yelp=True):
     else:
         print(reviews_df['biz_sentiment'].value_counts())
         print(reviews_df['biz_sentiment'].value_counts(normalize=True))
+        
+        print(f"\nSubsetting LLM reviews to those written by {model} with prompt template no. {prompt_ix}...")
+        reviews_df = reviews_df.loc[(reviews_df['model']==model) & (reviews_df['prompt_ix']==prompt_ix)].copy()
+        print(f'\tNew number of reviews: {len(reviews_df)}')
         
         print("\nSubsampling LLM reviews to be stratified evenly across covariates besides length and sentiment...")
         print(reviews_df['biz_cuisine_region'].value_counts())
@@ -419,12 +423,12 @@ def do_all_regressions(out_dir, prefix, df, restaurants_df, cuisines_to_remove=s
             _do_regression(df.loc[df['biz_price_point'].isin({3,4})], dep_var, cuisine_ind_var, 'europe', 3, covariates, out_dir, 
                            f'{prefix}glass_ceiling_', user_controlled=user_controlled, overwrite=True, sentiment_ref_level=sentiment_ref_level)
 
-def main(path_to_restaurants_df, path_to_reviews_df, out_dir, debug, do_yelp, sentiment_ref):
+def main(path_to_restaurants_df, path_to_reviews_df, out_dir, debug, do_yelp, sentiment_ref, model, prompt_ix):
     if do_yelp:
         restaurants = load_restaurants_df(path_to_restaurants_df)
     else:
         restaurants = None
-    reviews = load_reviews_df(path_to_reviews_df, debug, do_yelp=do_yelp)
+    reviews = load_reviews_df(path_to_reviews_df, debug, do_yelp=do_yelp, model=model, prompt_ix=prompt_ix)
     reviews = zscore_df(reviews)
     if not debug:
         check_VIF(reviews)
@@ -452,14 +456,24 @@ if __name__ == "__main__":
                         help='whether to run on Yelp reviews or LLM reviews')
     parser.add_argument('--sentiment_ref', type=str, default='Neutral',
                         help='sentiment reference level for LLM reviews')
+    parser.add_argument('--model', type=str, default='gpt-3.5-turbo-0613',
+                        help='GPT model to subset LLM analysis to')
+    parser.add_argument('--prompt_index', type=int, default=0,
+                        help='GPT prompt template number to subset LLM analysis to')
     args = parser.parse_args()
     if not args.debug:
         print("\n******WARNING****** DEBUG MODE OFF!")
     else:
         print("\nRunning in debug mode; will skip VIF scores check.")
-    
-    if not os.path.exists(args.out_dir):
-        os.makedirs(args.out_dir)
         
-    main(args.path_to_restaurants_df, args.path_to_reviews_df, args.out_dir, args.debug, args.do_yelp, args.sentiment_ref)
+    if not args.do_yelp:
+        out_dir = f'{args.model}_prompt-{args.prompt_index}_{args.out_dir}'
+        print(f"\nWill write results to: {out_dir}")
+    else:
+        out_dir = args.out_dir
+    
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+        
+    main(args.path_to_restaurants_df, args.path_to_reviews_df, out_dir, args.debug, args.do_yelp, args.sentiment_ref, args.model, args.prompt_index)
     
