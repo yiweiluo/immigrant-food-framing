@@ -128,7 +128,7 @@ def filter_businesses_for_regression(restaurant_data):
 
     return dat
 
-def load_raw_reviews(path_to_raw_reviews, text_field):
+def load_raw_reviews(path_to_raw_reviews, text_field, guid):
     """Load raw reviews to get review-business relationships and review lengths."""
     
     print("\nLoading in raw reviews...")
@@ -141,6 +141,9 @@ def load_raw_reviews(path_to_raw_reviews, text_field):
     print("\tDone! Review length distribution:")
     print(raw_df['len'].describe())
     
+    print("\nConverting all GUIDs to strings...")
+    raw_df[guid] = raw_df[guid].apply(lambda x: str(x))
+            
     return raw_df
 
 def get_filtered_business_reviews(filtered_restaurant_data, raw_reviews):
@@ -232,8 +235,8 @@ def create_reviews_df(review_ids, raw_reviews, guid, framing_scores_lookup, out_
     
     return per_review_df
 
-def hydrate_llm_reviews(og_reviews, reviews_df, out_dir):
-
+def hydrate_llm_reviews(og_reviews, reviews_df, out_dir, guid):
+    
     print("\nHydrating reviews df with meta-info fields...")
     field2col_name = {'sentiment': 'sentiment',
                       'price_point': 'star',
@@ -242,13 +245,13 @@ def hydrate_llm_reviews(og_reviews, reviews_df, out_dir):
     
     for field in tqdm(field2col_name):
         if field == 'cuisines':
-            field_lookup = dict(zip(og_reviews['guid'], 
+            field_lookup = dict(zip(og_reviews[guid], 
                                             og_reviews[field2col_name[field]].apply(lambda x: {x.lower()})))
         elif field == 'cuisine_region':
-            field_lookup = dict(zip(og_reviews['guid'], 
+            field_lookup = dict(zip(og_reviews[guid], 
                                             og_reviews[field2col_name[field]].apply(lambda x: ethnic_cat2continent[x.lower()])))
         else:
-            field_lookup = dict(zip(og_reviews['guid'], og_reviews[field2col_name[field]]))
+            field_lookup = dict(zip(og_reviews[guid], og_reviews[field2col_name[field]]))
         
         reviews_df[f"biz_{field}"] = reviews_df['review_id'].apply(lambda x: field_lookup[x])
     print("\tDone! New reviews_df columns:", reviews_df.columns)
@@ -325,12 +328,12 @@ def main(path_to_enriched_df, path_to_raw_reviews, path_to_framing_scores, guid,
         reviews_df = create_reviews_df(review_ids, raw_reviews, guid, master_frame_lookup, out_dir, do_yelp, debug)
         hydrated_reviews_df = hydrate_reviews_with_biz_user_data(filtered_restaurants, reviews_df, out_dir)
     else:
-        raw_reviews = load_raw_reviews(path_to_raw_reviews, text_field)
-        review_ids = set(raw_reviews[guid].values).difference({'error'})
+        raw_reviews = load_raw_reviews(path_to_raw_reviews, text_field, guid)
+        review_ids = set([str(x) for x in set(raw_reviews[guid].values).difference({'error'})])
         master_frame_lookup = load_frame_lookups(path_to_framing_scores, debug)
         master_frame_lookup = master_frame_lookup[~master_frame_lookup.index.duplicated(keep='first')]
         reviews_df = create_reviews_df(review_ids, raw_reviews, guid, master_frame_lookup, out_dir, do_yelp, debug)
-        hydrated_reviews_df = hydrate_llm_reviews(raw_reviews, reviews_df, out_dir)
+        hydrated_reviews_df = hydrate_llm_reviews(raw_reviews, reviews_df, out_dir, guid)
     
 if __name__ == "__main__":
     
@@ -359,6 +362,6 @@ if __name__ == "__main__":
     
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
-        
+                
     main(args.path_to_enriched_df, args.path_to_raw_reviews, args.path_to_framing_scores, args.guid, args.text_field, args.out_dir, args.do_yelp, args.debug)
     

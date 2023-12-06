@@ -71,7 +71,7 @@ def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, t
             print("\nRan out of input, terminating.")
             break
         print(f"\nProcessing batch {batch_no} of length {len(batch)}, with (start, end) indices = ({batch['og_index'].values[0]}, {batch['og_index'].values[-1]})...")
-        time.sleep(20)
+        time.sleep(5)
 
         doc_bin = DocBin(attrs=["ORTH", "TAG", "HEAD", "DEP", "ENT_IOB", "ENT_TYPE", "ENT_KB_ID", "LEMMA", "MORPH", "POS"], store_user_data=True)
         for row_ix, row in tqdm(batch.iterrows()):

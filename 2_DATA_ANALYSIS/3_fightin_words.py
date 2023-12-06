@@ -213,8 +213,11 @@ def fightin_words_report(out_dir, df, features_lookup, guid, feature_list, NEGAT
 def main(path_to_reviews_df, path_to_lookup, guid, out_dir, do_yelp):
     reviews = load_reviews_df(path_to_reviews_df, do_yelp=do_yelp)
     feature_lookup = load_lookup(path_to_lookup)
-    fightin_words_report(out_dir, reviews, feature_list={'exotic_words_agg','auth_words_agg','typic_words_agg'})
-    fightin_words_report(out_dir, reviews, feature_list={'filtered_liwc_posemo_agg','luxury_words_agg','hygiene_words_agg','cheapness_words_agg'})
+    # most distinctive othering words
+    fightin_words_report(out_dir, reviews, feature_lookup, guid, feature_list={'exotic_words_agg','auth_words_agg','typic_words_agg'})
+    # most distinctive status words
+    fightin_words_report(out_dir, reviews, feature_lookup, guid, feature_list={'filtered_liwc_posemo_agg','luxury_words_agg','hygiene_words_agg','cheapness_words_agg'})
+    # most distinctive general words
     fightin_words_report(out_dir, reviews, feature_lookup, guid, feature_list=None)
     
 if __name__ == "__main__":
