@@ -4,3 +4,18 @@ json_counter_test.pkl
 2_DATA_ANALYSIS/results/
 data/llm/gpt3_reviews_concat.csv
 Food prompts.ipynb
+2_DATA_ANALYSIS/gpt-3.5-turbo-0613_prompt-0_llm_fightin_words_results/
+2_DATA_ANALYSIS/gpt-3.5-turbo-0613_prompt-0_llm_results/
+2_DATA_ANALYSIS/gpt-3.5-turbo-0613_prompt-1_llm_fightin_words_results/
+2_DATA_ANALYSIS/gpt-3.5-turbo-0613_prompt-1_llm_results/
+2_DATA_ANALYSIS/gpt-3.5-turbo-0613_prompt-2_llm_fightin_words_results/
+2_DATA_ANALYSIS/gpt-3.5-turbo-0613_prompt-2_llm_results/
+2_DATA_ANALYSIS/gpt-3.5-turbo-1106_prompt-0_llm_fightin_words_results/
+2_DATA_ANALYSIS/gpt-3.5-turbo-1106_prompt-0_llm_results/
+2_DATA_ANALYSIS/gpt-3.5-turbo-1106_prompt-1_llm_fightin_words_results/
+2_DATA_ANALYSIS/gpt-3.5-turbo-1106_prompt-1_llm_results/
+2_DATA_ANALYSIS/gpt-3.5-turbo-1106_prompt-2_llm_fightin_words_results/
+2_DATA_ANALYSIS/gpt-3.5-turbo-1106_prompt-2_llm_results/
+2_DATA_ANALYSIS/results.zip
+2_DATA_ANALYSIS/test_regressions.ipynb
+
