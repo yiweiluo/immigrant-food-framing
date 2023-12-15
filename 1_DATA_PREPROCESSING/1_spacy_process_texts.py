@@ -18,8 +18,10 @@ nlp.add_pipe('coreferee')
 
 def load_df(path_to_df, debug, start_batch_no, end_batch_no, batch_size):
     file_sep = ',' if path_to_df.endswith('.csv') else '\t'
-    print(f"\nReading in lines {start_batch_no*batch_size} to {start_batch_no*batch_size+(end_batch_no-start_batch_no)*batch_size} of df...")
-    df = pd.read_csv(path_to_df, sep=file_sep, skiprows=range(1,start_batch_no*batch_size+1), nrows=(end_batch_no-start_batch_no)*batch_size)#, index_col=0)
+#     print(f"\nReading in lines {start_batch_no*batch_size} to {start_batch_no*batch_size+(end_batch_no-start_batch_no)*batch_size} of df...")
+#     df = pd.read_csv(path_to_df, sep=file_sep, skiprows=range(1,start_batch_no*batch_size+1), nrows=(end_batch_no-start_batch_no)*batch_size)#, index_col=0)
+    print(f"\nReading in df...")
+    df = pd.read_csv(path_to_df, sep=file_sep)
     if 'og_index' not in df.columns:
         print("\tNo OG index found; adding original index to keep track of batches...")
         df['og_index'] = list(range(len(df)))
@@ -53,7 +55,7 @@ def spacy_process(raw_text):
     doc = nlp(raw_text)
     return doc
 
-def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, text_fields='text', debug=False):
+def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, text_fields='text', debug=False, overwrite=False):
     
     if debug:
         print("\nDebug mode ON, will stop after first batch.")
@@ -66,7 +68,13 @@ def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, t
     
     #batch_groups = batched_df.groupby('batch_no')
     for batch_no in trange(start_batch_no, end_batch_no, 1):
-        batch = df.iloc[(batch_no-start_batch_no)*batch_size:(batch_no-start_batch_no+1)*batch_size]
+        
+        out_fname = os.path.join(out_dir, f'{batch_no}.spacy')
+        if os.path.exists(out_fname) and not overwrite:
+            print(f"\t{out_fname} already exists; skipping current batch.")
+            continue 
+            
+        batch = df.iloc[batch_no*batch_size:batch_no*batch_size+batch_size]
         if len(batch) == 0:
             print("\nRan out of input, terminating.")
             break
@@ -85,7 +93,6 @@ def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, t
                 print('\n\tProcessed lemmas:', ' '.join([tok.lemma_ for tok in doc]))
             doc_bin.add(doc)
 
-        out_fname = os.path.join(out_dir, f'{batch_no}.spacy')
         print(f"\tDone processing! Saving to disk at: {out_fname}...")
         doc_bin.to_disk(out_fname)
         print("\t\tDone!")
@@ -101,10 +108,10 @@ def batch_spacy_process(out_dir, df, start_batch_no, end_batch_no, batch_size, t
             print("Coref results:", docs[0]._.coref_chains)
             break
     
-def main(path_to_dataset, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug):
+def main(path_to_dataset, out_dir, text_fields, batch_size, start_batch_no, end_batch_no, debug, overwrite):
     texts = load_df(path_to_dataset, debug, start_batch_no, end_batch_no, batch_size)
     reviews = batch_df(texts, batch_size)
-    batch_spacy_process(out_dir, texts, start_batch_no, end_batch_no, batch_size, text_fields=text_fields, debug=debug)
+    batch_spacy_process(out_dir, texts, start_batch_no, end_batch_no, batch_size, text_fields=text_fields, debug=debug, overwrite=overwrite)
     
 if __name__ == "__main__":
     
@@ -123,6 +130,8 @@ if __name__ == "__main__":
                         help='batch number to end before (non-inclusive)')
     parser.add_argument('--debug', action='store_true',
                         help='whether to run on subset of data for debugging purposes')
+    parser.add_argument('--overwrite', action='store_true',
+                        help='whether to overwrite existing batches')
     args = parser.parse_args()
     if not args.debug:
         print("\n******WARNING****** DEBUG MODE OFF!")
@@ -133,5 +142,5 @@ if __name__ == "__main__":
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
         
-    main(args.path_to_texts, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug)
+    main(args.path_to_texts, args.out_dir, args.text_fields, args.batch_size, args.start_batch_no, args.end_batch_no, args.debug, args.overwrite)
     
