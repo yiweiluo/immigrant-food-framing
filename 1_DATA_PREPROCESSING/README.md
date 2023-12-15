@@ -6,10 +6,15 @@ Once you have completed the getting started steps, the scripts in this directory
 
 `1_spacy_process_texts.py` processes the raw review texts in batches with spaCy and the Coreferee add-on for coreference resolution. GPU recommended for efficient processing. All default arguments can be used to process Yelp reviews. To process GPT reviews, run the following:
 ```
-python 1_spacy_process_texts.py --path_to_texts ../data/llm/gpt3_reviews_concat.csv --out_dir ../data/llm/spacy_processed --text_fields review_no_disclaimers
+python 1_spacy_process_texts.py --path_to_texts ../data/llm/gpt_new_reviews.csv --out_dir ../data/llm/spacy_processed --text_fields review_no_disclaimers
 ```
 
 `2_extract_frames.py` extracts adjectival features from the parsed review data and creates a lookup dictionary `frames_lookup.pkl` that stores the extracted features per review. All default arguments can be used to process Yelp reviews. To process GPT reviews, run the following:
 ```
-python 2_extract_frames.py --path_to_raw ../data/llm/gpt3_reviews_concat.csv --path_to_parsed ../data/llm/spacy_processed --out_dir ../data/llm --guid guid --text_field review_no_disclaimers
+python 2_extract_frames.py --path_to_raw ../data/llm/gpt_new_reviews.csv --path_to_parsed ../data/llm/spacy_processed --out_dir ../data/llm --guid guid --text_field review_no_disclaimers
+```
+
+If you wish, you can also run `get_synthetic_reviews.py` to collect your own GPT reviews (instead of using our dataset), though you will need an OpenAPI key and credits. Usage is as follows:
+```
+python get_synthetic_reviews.py --api_key <ADD YOUR API KEY HERE> 
 ```
