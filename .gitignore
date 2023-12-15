@@ -18,4 +18,10 @@ Food prompts.ipynb
 2_DATA_ANALYSIS/gpt-3.5-turbo-1106_prompt-2_llm_results/
 2_DATA_ANALYSIS/results.zip
 2_DATA_ANALYSIS/test_regressions.ipynb
+data/gpt_output/
+data/llm/gpt_new_reviews.csv
+data/llm/per_reviews_df.csv
+data/llm/spacy_processed/
+data/llm/tmp/
+data/yelp/per_reviews_df.csv
 
