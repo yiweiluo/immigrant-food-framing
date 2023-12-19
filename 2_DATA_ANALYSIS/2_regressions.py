@@ -252,6 +252,38 @@ def _do_race_regression(df, restaurants_df, price_ref, out_dir, prefix, user_con
     
     print("\nGetting median/IQR pct. race of restaurant neighborhoods...")
     print(restaurants_df[['pct_asian','pct_hisp']].describe())
+    as_thresh = restaurants_df['pct_asian'].quantile(.5)
+    hisp_thresh = restaurants_df['pct_hisp'].quantile(.5)
+    print("\nAdding categorical hi/lo race variable...\n")
+    df['biz_nb_pct_asian_cat'] = df['biz_nb_pct_asian'].apply(lambda x: 'hi' if x >= as_thresh else 'lo')
+    df['biz_nb_pct_hisp_cat'] = df['biz_nb_pct_hisp'].apply(lambda x: 'hi' if x >= hisp_thresh else 'lo')
+    print(df['biz_nb_pct_asian_cat'].value_counts())
+    print()
+    print(df['biz_nb_pct_hisp_cat'].value_counts())
+    
+    # Do regressions
+    race2region = {'asian':'asia', 'hisp':'latin_america'}
+    for dep_var in ['auth_words_agg_score','exotic_words_agg_score','typic_words_agg_score']:
+        for race in ['asian','hisp']:
+            mod = smf.ols(formula=f"{dep_var} ~ C(biz_price_point, Treatment(reference={price_ref})) + C(biz_nb_pct_{race}_cat, Treatment(reference='hi')) + review_len + biz_mean_star_rating + biz_median_nb_income + biz_nb_diversity", 
+                  data=df.loc[df['biz_cuisine_region']==race2region[race]])
+            modf = mod.fit()
+            #print(modf.summary())
+            savefile = os.path.join(out_dir, f"{prefix}{race}_{dep_var}_othering_median_categorical.csv")
+            print(f'\n\tSaved results of {dep_var} regression with {race} to {savefile}.')
+            save_res(modf, savefile, user_controlled=False)
+            savefile_covars = os.path.join(out_dir, f"{prefix}{race}_{dep_var}_othering_median_categorical_covars.csv")
+            modf.cov_params().to_csv(savefile_covars)
+        
+def _do_race_regression_deprecated(df, restaurants_df, price_ref, out_dir, prefix, user_controlled=False, overwrite=False):
+    print("\nDoing Study 1 race effect regressions... first excluding reviews from known visitors...")
+    old_len = len(df)
+    known_origin_users = set(pickle.load(open('../data/yelp/known_visitors.pkl','rb')))
+    df = df.loc[~df['user_id'].isin(known_origin_users)]
+    print(f"\tDone! Excluded {old_len - len(df)} reviews.")
+    
+    print("\nGetting median/IQR pct. race of restaurant neighborhoods...")
+    print(restaurants_df[['pct_asian','pct_hisp']].describe())
     hi_asian, lo_asian = df.loc[df['biz_nb_pct_asian']>=restaurants_df['pct_asian'].quantile(.5)], df.loc[df['biz_nb_pct_asian']<=restaurants_df['pct_asian'].quantile(.5)]
     hi_hisp, lo_hisp = df.loc[df['biz_nb_pct_hisp']>=restaurants_df['pct_hisp'].quantile(.5)], df.loc[df['biz_nb_pct_hisp']<=restaurants_df['pct_hisp'].quantile(.5)]
     print("\tNum reviews from hi, lo %Asian neighborhoods:", len(hi_asian), len(lo_asian))
@@ -446,7 +478,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--path_to_restaurants_df', type=str, default='../data/yelp/census_enriched_business_data.csv',
                         help='where to read in restaurants dataframe from')
-    parser.add_argument('--path_to_reviews_df', type=str, default='../data/yelp/restaurants_only/per_reviews_df.csv',
+    parser.add_argument('--path_to_reviews_df', type=str, default='../data/yelp/per_reviews_df.csv',
                         help='where to read in reviews dataframe from')
     parser.add_argument('--out_dir', type=str, default='results/',
                         help='directory to save output to')
