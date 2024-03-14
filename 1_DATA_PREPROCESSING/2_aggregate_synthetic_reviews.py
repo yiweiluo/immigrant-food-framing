@@ -22,9 +22,9 @@ def strip_disclaimer(s):
                         if 'language model' not in x.lower() 
                         and 'openai' not in x.lower()])
 
-def main(out_dir, debug):
+def main(path_to_jsons, out_dir):
     
-    collected = glob.glob(os.path.join(out_dir, '*.json'))
+    collected = glob.glob(os.path.join(path_to_jsons, '*.json'))
     print(f"\nCollected {len(collected)} LLM review jsons.")
     print(collected[:3])
     print()
