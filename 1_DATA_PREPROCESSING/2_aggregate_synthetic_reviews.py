@@ -57,8 +57,8 @@ def main(path_to_jsons, out_dir):
     df_no_err['guid'] = range(len(df_no_err))
 
     # save
-    print(f"Saving aggregated output to: {os.path.join(out_dir, 'agg_gpt_reviews.csv')}")
-    df_no_err.to_csv(os.path.join(out_dir, 'agg_gpt_reviews.csv'))
+    print(f"Saving aggregated output to: {os.path.join(out_dir, 'gpt_new_reviews.csv')}")
+    df_no_err.to_csv(os.path.join(out_dir, 'gpt_new_reviews.csv'))
     print("\tAll done!")
     
 if __name__ == "__main__":
