@@ -23,7 +23,7 @@ def strip_disclaimer(s):
                         and 'openai' not in x.lower()])
 
 def main(path_to_jsons, out_dir):
-    
+        
     collected = glob.glob(os.path.join(path_to_jsons, '*.json'))
     print(f"\nCollected {len(collected)} LLM review jsons.")
     print(collected[:3])
@@ -72,6 +72,6 @@ if __name__ == "__main__":
     
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
-    
+            
     main(args.path_to_jsons, args.out_dir)
     
